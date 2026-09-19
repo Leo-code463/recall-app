@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Remix Recall - AI Meeting Assistant</title>
+    <meta name="description" content="AI meeting recorder, audio transcriber with diarization, AI summaries, conversational intelligence, and Google Calendar & Tasks sync." />
+    <meta property="og:title" content="Remix Recall - AI Meeting Assistant" />
+    <meta property="og:description" content="AI meeting recorder, audio transcriber with diarization, AI summaries, conversational intelligence, and Google Calendar & Tasks sync." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+      // Se questa pagina viene caricata all'interno di un popup di autenticazione Google (OAuth 2.0 Hash),
+      // interrompiamo immediatamente il caricamento per evitare di montare una seconda istanza completa di React.
+      if (window.opener && window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('id_token='))) {
+        document.documentElement.style.display = 'none';
+        window.stop();
+      }
+    </script>
+  </head>
+  <body class="bg-[#F8F9FD] text-[#1A1D1F] antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

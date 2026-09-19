@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  * {
+    border-color: var(--color-gray-200, #e5e7eb);
+  }
+  
+  .dark * {
+    border-color: var(--color-neutral-800, #272B30);
+  }
+
+  html, body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+
+  /* Rendi il font elegante in tutto il resto dell'applicazione rimuovendo il grassetto pesante dai sottotitoli */
+  h1, h2, h3, h4, h5, h6, b, strong,
+  .font-bold, .font-semibold, .font-extrabold {
+    font-weight: 500 !important;
+  }
+
+  /* Eccezione specifica per rendere in grassetto solo la scritta in alto del saluto */
+  .main-greeting-bold {
+    font-weight: bold !important;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(108, 93, 211, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(108, 93, 211, 0.4);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes loading-progress {
+  0% {
+    left: -40%;
+    width: 40%;
+  }
+  50% {
+    width: 60%;
+  }
+  100% {
+    left: 100%;
+    width: 40%;
+  }
+}
+
+.animate-progress {
+  position: relative;
+  animation: loading-progress 1.6s ease-in-out infinite;
+}
+

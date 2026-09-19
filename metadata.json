@@ -1,0 +1,10 @@
+{
+  "name": "Remix Recall",
+  "description": "AI meeting recorder, audio transcriber with diarization, AI summaries, conversational intelligence, and Google Calendar \u0026 Tasks sync.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
