@@ -1,5 +1,7 @@
 import { PlanType, MeetingSummary, DetectedCalendarEvent, TaskAiMeetingDetection } from '../types';
 
+const API_BASE = 'https://recall-app-1.onrender.com';
+
 export interface ProcessedMeetingResult {
   title: string;
   language: string;
@@ -142,7 +144,7 @@ export async function processMeetingFastApi(params: {
 }): Promise<ProcessedMeetingResult> {
   const sanitizedAudio = cleanBase64(params.audioBase64);
 
-  const response = await fetch('/api/process-meeting', {
+  const response = await fetch(`${API_BASE}/api/process-meeting`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -223,7 +225,7 @@ export async function transcribeAudioApi(params: {
 }> {
   const sanitizedAudio = cleanBase64(params.audioBase64);
 
-  const response = await fetch('/api/transcribe', {
+  const response = await fetch(`${API_BASE}/api/transcribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -248,7 +250,7 @@ export async function summarizeMeetingApi(params: {
   meetingTitle: string;
   plan: PlanType;
 }): Promise<MeetingSummary> {
-  const response = await fetch('/api/summarize', {
+  const response = await fetch(`${API_BASE}/api/summarize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -285,7 +287,7 @@ export async function detectCalendarEventsApi(params: {
   transcript: any;
   meetingDate?: string;
 }): Promise<DetectedCalendarEvent[]> {
-  const response = await fetch('/api/detect-calendar-events', {
+  const response = await fetch(`${API_BASE}/api/detect-calendar-events`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -320,7 +322,7 @@ export async function analyzeTasksApi(params: {
   }
 
   try {
-    const response = await fetch('/api/analyze-tasks', {
+    const response = await fetch(`${API_BASE}/api/analyze-tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -366,7 +368,7 @@ export async function chatWithMeetingAiApi(params: {
   meetingTitle: string;
   plan: PlanType;
 }): Promise<string> {
-  const response = await fetch('/api/chat', {
+  const response = await fetch(`${API_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
