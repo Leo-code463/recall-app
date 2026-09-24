@@ -64,17 +64,14 @@ function extractBase64Payload(dataUriOrBase64?: string): string {
 // High-speed, lightweight model pools:
 // Audio-optimized models (Flash Lite and Gemini Transcribe for ultra-low latency and fast transcription)
 const AUDIO_MODELS = [
-  "gemini-3.1-flash-lite",
-  "gemini-flash-latest",
-  "gemini-3.5-transcribe",
-  "gemini-3.7-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.8-flash",
 ];
 
 // Text-optimized models (Flash Lite is near-instant, minimal token consumption, ultra-efficient)
 const FAST_TEXT_MODELS = [
-  "gemini-3.1-flash-lite",
-  "gemini-flash-latest",
-  "gemini-3.7-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.8-flash",
 ];
 
 // Robust Gemini Content Generator with multi-model fallback and high-demand recovery
@@ -96,7 +93,7 @@ async function generateWithModelFallback(params: {
       if (params.responseMimeType) {
         config.responseMimeType = params.responseMimeType;
       }
-      if (model.includes("3.7") || model.includes("3.1-flash-lite")) {
+      if (model.includes("3.5-flash-lite") || model.includes("3.8-flash")) {
       config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
       }
       const response = await ai.models.generateContent({
