@@ -97,9 +97,8 @@ async function generateWithModelFallback(params: {
         config.responseMimeType = params.responseMimeType;
       }
       if (model.includes("3.7") || model.includes("3.1-flash-lite")) {
-        config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
+      config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
       }
-
       const response = await ai.models.generateContent({
         model,
         contents: params.contents,
