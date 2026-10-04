@@ -66,7 +66,7 @@ const AppContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-[#FCFCFC] transition-colors flex flex-col font-['Inter',sans-serif] overflow-x-hidden">
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-10 pt-3.5 sm:pt-6 pb-28 sm:pb-24">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-10 pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-28 sm:pb-24">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeMeetingId ? `meeting-${activeMeetingId}` : isSettingsModalOpen ? 'settings' : activeTab}
@@ -106,4 +106,3 @@ export default function App() {
     </LanguageProvider>
   );
 }
-

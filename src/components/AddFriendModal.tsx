@@ -71,8 +71,7 @@ export const AddFriendModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-        className="bg-white dark:bg-[#1A1D1F] w-full max-w-md rounded-[28px] shadow-2xl border border-gray-100 dark:border-[#272B30] overflow-hidden p-6 relative animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
+                className="glass-card w-full max-w-md rounded-[28px] shadow-2xl border border-gray-100 dark:border-[#272B30] overflow-hidden p-6 relative animate-in zoom-in-95 duration-200"
       >
         {/* Close Button */}
         <button

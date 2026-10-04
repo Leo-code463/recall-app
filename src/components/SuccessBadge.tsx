@@ -56,14 +56,14 @@ export const SuccessBadge: React.FC<SuccessBadgeProps> = ({
               stiffness: 280,
               damping: 18,
             }}
-            className="flex flex-col items-center gap-4 bg-white dark:bg-[#1A1D1F] p-7 sm:p-9 rounded-3xl border border-gray-100 dark:border-[#272B30] shadow-2xl max-w-[280px] sm:max-w-xs text-center pointer-events-auto"
+            className="flex flex-col items-center gap-4 glass-card p-7 sm:p-9 rounded-3xl border border-gray-100 dark:border-[#272B30] shadow-2xl max-w-[280px] sm:max-w-xs text-center pointer-events-auto"
           >
             {/* The Rosette Badge / Scalloped Circle */}
             <div className={`relative ${dimensions[size]} flex items-center justify-center`}>
               <svg
                 viewBox="0 0 100 100"
                 className="w-full h-full drop-shadow-[0_4px_12px_rgba(16,185,129,0.3)]"
-              >
+            >
                 {/* Wavy scalloped background */}
                 <motion.path
                   d={pathData}

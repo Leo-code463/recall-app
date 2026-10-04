@@ -99,7 +99,7 @@ export const AgendaView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-300 pb-20">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
+        <div className="sticky top-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:top-[calc(1.5rem+env(safe-area-inset-top,0px))] z-30 bg-[#F8F9FB] dark:bg-[#111315] pb-2">
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight">
             {t('agenda')}
           </h1>

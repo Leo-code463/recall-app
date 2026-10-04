@@ -59,7 +59,7 @@ export const CalendarPreviewModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-55 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#1A1D1F] w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-xl border-t sm:border border-gray-100 dark:border-[#272B30] overflow-hidden max-h-[85vh] sm:max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+      <div className="glass-card w-full sm:max-w-md rounded-t-3xl ...">
         
         {/* Header */}
         <div className="p-5 border-b border-gray-100 dark:border-[#272B30] flex items-center justify-between">

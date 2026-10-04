@@ -69,4 +69,17 @@
   position: relative;
   animation: loading-progress 1.6s ease-in-out infinite;
 }
+/* Effetto Liquid Glass riutilizzabile per card e popup */
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 4px 16px rgba(118, 30, 175, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
 
+.dark .glass-card {
+  background: rgba(26, 29, 31, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}

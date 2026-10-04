@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { translations, TranslationDict } from '../i18n/translations';
+import { apiFetch } from '../services/apiClient';
 
 type Language = 'it' | 'en';
 
@@ -30,11 +31,10 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         const parsed = JSON.parse(savedUser);
         if (parsed && parsed.email) {
-          fetch('/api/users/update-language', {
+          apiFetch('/api/users/update-language', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              email: parsed.email.toLowerCase().trim(),
               language: lang,
             }),
           })

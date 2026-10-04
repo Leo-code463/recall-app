@@ -23,7 +23,7 @@ export const BottomNav: React.FC = () => {
   ];
 
   const handleClick = (itemId: string) => {
-    triggerHaptic(10); // Subtle feedback
+    triggerHaptic(10);
     if (itemId === 'addFriend') {
       setIsAddFriendModalOpen(true);
     } else {
@@ -32,12 +32,11 @@ export const BottomNav: React.FC = () => {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none flex justify-center px-3 sm:px-6 pb-2 sm:pb-5">
-      {/* Liquid Glass Capsule Bar */}
-      <div className="pointer-events-auto relative w-full max-w-sm bg-white/70 dark:bg-[#1A1D1F]/75 backdrop-blur-2xl backdrop-saturate-150 border border-white/60 dark:border-white/10 shadow-[0_8px_25px_-5px_rgba(0,0,0,0.1),0_3px_12px_rgba(118,30,175,0.06)] dark:shadow-[0_10px_30px_-5px_rgba(0,0,0,0.4),0_3px_15px_rgba(118,30,175,0.15)] rounded-2xl sm:rounded-full px-2 sm:px-4 h-13 sm:h-14 flex items-center justify-between transition-all duration-300">
-        
-        {/* Subtle Top Specular Highlight for Liquid Glass Feel */}
-        <div className="absolute inset-x-4 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/80 dark:via-white/20 to-transparent rounded-full pointer-events-none" />
+    <nav className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none">
+      {/* Sfumatura in stile Spotify che si fonde con lo sfondo della pagina */}
+      <div className="absolute inset-0 h-32 bg-gradient-to-t from-[#F8F9FB] via-[#F8F9FB]/95 to-transparent dark:from-[#111315] dark:via-[#111315]/95 pointer-events-none" />
+
+      <div className="relative pointer-events-auto flex items-center justify-between max-w-sm mx-auto px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
 
         {/* Left tabs: Home & Cerca */}
         <div className="flex items-center justify-around w-2/5">
@@ -49,13 +48,13 @@ export const BottomNav: React.FC = () => {
                 key={item.id}
                 id={`bottom-nav-${item.id}-btn`}
                 onClick={() => handleClick(item.id)}
-                className={`group flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                className={`group flex flex-col items-center justify-center py-1 px-2.5 transition-all duration-200 cursor-pointer ${
                   isActive
-                    ? 'text-[#761EAF] dark:text-[#C084FC] bg-[#761EAF]/10 dark:bg-[#761EAF]/20 shadow-inner'
-                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#1A1A1A] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
+                    ? 'text-[#761EAF] dark:text-[#C084FC]'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#1A1A1A] dark:hover:text-white'
                 }`}
               >
-                <Icon className={`w-4 h-4 transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
+                <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
                 <span className="text-[9px] font-extrabold mt-0.5 tracking-tight">{item.label}</span>
               </button>
             );
@@ -63,21 +62,21 @@ export const BottomNav: React.FC = () => {
         </div>
 
         {/* Center Floating Record Action Button */}
-        <div className="absolute left-1/2 -top-4 sm:-top-[18px] -translate-x-1/2 flex flex-col items-center">
+        <div className="flex flex-col items-center -mt-6">
           <button
             id="bottom-nav-record-btn"
             onClick={() => {
-              triggerHaptic(20); // Stronger haptic for macro action
+              triggerHaptic(20);
               setIsRecordingModalOpen(true);
             }}
             aria-label="Registra nuova riunione"
-            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-[#6B1D9F] via-[#7B22BC] to-[#9C44D4] hover:from-[#761EAF] hover:to-[#BC6EEB] text-white flex items-center justify-center shadow-md shadow-[#761EAF]/30 hover:shadow-lg hover:shadow-[#761EAF]/40 active:scale-95 transition-all duration-200 border-[2.5px] sm:border-3 border-white dark:border-[#1A1D1F] ring-1 ring-[#761EAF]/20 cursor-pointer"
+            className="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-gradient-to-tr from-[#6B1D9F] via-[#7B22BC] to-[#9C44D4] hover:from-[#761EAF] hover:to-[#BC6EEB] text-white flex items-center justify-center shadow-lg shadow-[#761EAF]/30 hover:shadow-xl hover:shadow-[#761EAF]/40 active:scale-95 transition-all duration-200 border-[3px] border-[#F8F9FB] dark:border-[#111315] cursor-pointer"
           >
-            <Mic className="w-4.5 h-4.5 animate-pulse" />
+            <Mic className="w-5 h-5 animate-pulse" />
           </button>
         </div>
 
-        {/* Right tabs: Agenda & Profilo (now Add Friend "+") */}
+        {/* Right tabs: Agenda & Aggiungi */}
         <div className="flex items-center justify-around w-2/5">
           {navItems.slice(2, 4).map((item) => {
             const Icon = item.icon;
@@ -87,13 +86,13 @@ export const BottomNav: React.FC = () => {
                 key={item.id}
                 id={`bottom-nav-${item.id}-btn`}
                 onClick={() => handleClick(item.id)}
-                className={`group flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                className={`group flex flex-col items-center justify-center py-1 px-2.5 transition-all duration-200 cursor-pointer ${
                   isActive
-                    ? 'text-[#761EAF] dark:text-[#C084FC] bg-[#761EAF]/10 dark:bg-[#761EAF]/20 shadow-inner'
-                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#1A1A1A] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
+                    ? 'text-[#761EAF] dark:text-[#C084FC]'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#1A1A1A] dark:hover:text-white'
                 }`}
               >
-                <Icon className={`w-4 h-4 transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
+                <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
                 <span className="text-[9px] font-extrabold mt-0.5 tracking-tight">{item.label}</span>
               </button>
             );

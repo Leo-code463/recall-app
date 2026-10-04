@@ -6,6 +6,10 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   signOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
   User,
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -164,6 +168,66 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
   } finally {
     isSigningIn = false;
   }
+};
+
+// ---------- Account email + password (gestiti interamente da Firebase Auth) ----------
+
+export const friendlyAuthError = (err: any): string => {
+  switch (err?.code) {
+    case 'auth/email-already-in-use':
+      return 'Esiste già un account con questa email. Prova ad accedere.';
+    case 'auth/invalid-email':
+      return 'Indirizzo email non valido.';
+    case 'auth/weak-password':
+      return 'Password troppo debole: usa almeno 6 caratteri.';
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+    case 'auth/invalid-login-credentials':
+      return 'Email o password non corrette.';
+    case 'auth/too-many-requests':
+      return 'Troppi tentativi. Attendi qualche minuto e riprova.';
+    case 'auth/network-request-failed':
+      return 'Connessione assente. Controlla la rete e riprova.';
+    case 'auth/operation-not-allowed':
+      return "L'accesso con email e password non è abilitato nel progetto Firebase (Authentication > Sign-in method).";
+    case 'auth/user-disabled':
+      return 'Questo account è stato disattivato.';
+    default:
+      return err?.message || 'Errore durante l\'autenticazione. Riprova.';
+  }
+};
+
+/** Crea l'account e imposta il nome. L'email va poi verificata con il codice OTP. */
+export const registerEmailAccount = async (name: string, email: string, password: string): Promise<User> => {
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  try {
+    await updateProfile(cred.user, { displayName: name });
+  } catch (e) {
+    console.warn('updateProfile failed:', e);
+  }
+  // La verifica dell'email avviene con un codice OTP inviato dal nostro server (vedi otpService.ts)
+  return cred.user;
+};
+
+export const loginEmailAccount = async (email: string, password: string): Promise<User> => {
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  return cred.user;
+};
+
+/** Ricarica l'utente da Firebase; se ora è verificato rinnova il token (così il server vede email_verified = true). */
+export const refreshEmailVerified = async (): Promise<boolean> => {
+  const current = auth.currentUser;
+  if (!current) return false;
+  await current.reload();
+  if (current.emailVerified) {
+    await current.getIdToken(true);
+  }
+  return current.emailVerified;
+};
+
+export const sendPasswordReset = async (email: string): Promise<void> => {
+  await sendPasswordResetEmail(auth, email);
 };
 
 export const getAccessToken = async (): Promise<string | null> => {

@@ -52,7 +52,7 @@ export const ProfileView: React.FC = () => {
       </div>
 
       {/* User Card */}
-      <div className="bg-white dark:bg-[#1A1D1F] rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 dark:border-[#272B30] flex flex-col sm:flex-row items-center sm:items-start gap-6">
+      <div className="glass-card rounded-3xl p-6 sm:p-8">
         <div className="w-20 h-20 rounded-2xl bg-[#761EAF]/10 text-[#761EAF] dark:text-[#C084FC] text-2xl font-bold flex items-center justify-center ring-2 ring-[#761EAF]/20 overflow-hidden shrink-0">
           {user?.avatarUrl ? (
             <img

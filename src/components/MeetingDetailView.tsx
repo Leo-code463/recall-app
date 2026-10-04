@@ -355,7 +355,7 @@ ${JSON.stringify(meeting.summary)}
 
   if (!meeting) {
     return (
-      <div className="p-8 text-center bg-white dark:bg-[#1A1D1F] rounded-3xl border border-gray-100 dark:border-[#272B30] shadow-sm">
+      <div className="p-8 text-center glass-card rounded-3xl ...">
         <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">
           {language === 'it' ? 'Riunione non trovata' : 'Meeting not found'}
         </p>

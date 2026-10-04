@@ -75,7 +75,7 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
           </h3>
           
-          <div className="bg-white dark:bg-[#1A1D1F] rounded-[22px] border border-gray-100 dark:border-[#272B30] overflow-hidden divide-y divide-gray-100 dark:divide-[#272B30]">
+          <div className="glass-card rounded-[22px] border ...">
             {friendsReceivedPending.map((req) => (
               <div key={req.friendshipId} className="p-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">

@@ -90,7 +90,7 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
           }
         }}
         style={{ transform: `translateX(${swipeOffset}px)` }}
-        className="relative z-10 bg-white dark:bg-[#1A1D1F] rounded-3xl p-5 sm:p-6 shadow-xs border border-gray-200/80 dark:border-[#272B30] hover:border-[#761EAF] hover:shadow-md transition-all duration-150 ease-out cursor-pointer flex flex-col justify-between group"
+                className="relative z-10 glass-card !bg-white/95 dark:!bg-[#1A1D1F]/95 rounded-3xl p-5 sm:p-6 shadow-xs border border-gray-200/80 dark:border-[#272B30] hover:border-[#761EAF] hover:shadow-md transition-all duration-150 ease-out cursor-pointer flex flex-col justify-between group"
       >
         <div>
           <div className="flex items-center justify-between gap-2 mb-3">
@@ -192,33 +192,33 @@ export const SearchView: React.FC = () => {
     return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
   };
 
-  return (
+    return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 pb-20">
-      {/* Header */}
-      <div>
+      {/* Sticky Header + Search Bar (fissi in alto come Spotify) */}
+      <div className="sticky top-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:top-[calc(1.5rem+env(safe-area-inset-top,0px))] z-30 bg-[#F8F9FB] dark:bg-[#111315] pb-4 space-y-6 sm:space-y-8">
         <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight">
           {t('searchTitle')}
         </h1>
-      </div>
 
-      {/* Search Input Bar */}
-      <div className="relative">
-        <Search className="w-5 h-5 text-gray-400 absolute left-4 top-3.5" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={t('searchBarPlaceholder')}
-          className="w-full pl-12 pr-24 py-3.5 text-xs sm:text-sm rounded-2xl border border-gray-200/80 dark:border-[#272B30] bg-white dark:bg-[#1A1D1F] text-[#1A1A1A] dark:text-white shadow-xs focus:outline-none focus:ring-2 focus:ring-[#761EAF]"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute right-3.5 top-2.5 text-xs font-bold text-gray-500 hover:text-[#1A1A1A] dark:hover:text-white px-2.5 py-1 bg-gray-100 dark:bg-neutral-800 rounded-lg cursor-pointer transition-colors"
-          >
-            {t('clearBtn')}
-          </button>
-        )}
+        {/* Search Input Bar */}
+        <div className="relative">
+          <Search className="w-5 h-5 text-gray-400 absolute left-4 top-3.5" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('searchBarPlaceholder')}
+            className="w-full pl-12 pr-24 py-3.5 text-xs sm:text-sm rounded-2xl border border-gray-200/80 dark:border-[#272B30] bg-white dark:bg-[#1A1D1F] text-[#1A1A1A] dark:text-white shadow-xs focus:outline-none focus:ring-2 focus:ring-[#761EAF]"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3.5 top-2.5 text-xs font-bold text-gray-500 hover:text-[#1A1A1A] dark:hover:text-white px-2.5 py-1 bg-gray-100 dark:bg-neutral-800 rounded-lg cursor-pointer transition-colors"
+            >
+              {t('clearBtn')}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter Tag Pills */}

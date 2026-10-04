@@ -10,10 +10,27 @@ import {
 } from '../types';
 import { INITIAL_MEETINGS, UPCOMING_GOOGLE_EVENTS, INITIAL_TASKS } from '../data/initialData';
 import { GoogleWorkspaceService } from '../services/calendarService';
-import { initAuth, googleSignIn, logoutAuth, requestGoogleWorkspaceToken } from '../services/firebaseAuth';
+import {
+  initAuth,
+  googleSignIn,
+  logoutAuth,
+  requestGoogleWorkspaceToken,
+  registerEmailAccount,
+  loginEmailAccount,
+  refreshEmailVerified,
+  friendlyAuthError,
+} from '../services/firebaseAuth';
+import { apiFetch } from '../services/apiClient';
+import { requestEmailOtp, verifyEmailOtp, OtpError } from '../services/otpService';
 import { analyzeTasksApi } from '../services/geminiService';
-import { sendWelcomeEmail, sendOtpEmail } from '../services/emailService';
+import { sendWelcomeEmail } from '../services/emailService';
 import confetti from 'canvas-confetti';
+
+export interface OtpStatus {
+  error: string | null;
+  resendAfterSeconds: number;
+  stamp: number; // cambia a ogni invio, così il modal sa quando ripartire
+}
 
 interface AppContextType {
   user: UserProfile | null;
@@ -37,7 +54,6 @@ interface AppContextType {
   setIsUpgradeModalOpen: (open: boolean) => void;
   isOtpModalOpen: boolean;
   setIsOtpModalOpen: (open: boolean) => void;
-  pendingOtpCode: string;
   pendingOtpEmail: string;
 
   // Friendships state
@@ -54,10 +70,11 @@ interface AppContextType {
 
   // Actions
   loginWithEmail: (email: string, pass: string) => Promise<boolean>;
-  registerWithEmail: (name: string, email: string, pass: string) => Promise<string>;
+  registerWithEmail: (name: string, email: string, pass: string) => Promise<void>;
   loginWithGoogle: () => Promise<boolean>;
-  verifyOtp: (code: string) => boolean;
-  resendOtp: () => Promise<{ success: boolean; message: string; code: string }>;
+  verifyEmailCode: (code: string) => Promise<void>;
+  resendVerificationEmail: () => Promise<void>;
+  otpStatus: OtpStatus;
   logout: () => void;
   toggleTheme: () => void;
   setPlan: (plan: PlanType) => void;
@@ -147,10 +164,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState<boolean>(false);
   
-  // OTP Verification flow
+  // Email verification flow (link inviato da Firebase)
   const [isOtpModalOpen, setIsOtpModalOpen] = useState<boolean>(false);
-  const [pendingOtpCode, setPendingOtpCode] = useState<string>('842915');
   const [pendingOtpEmail, setPendingOtpEmail] = useState<string>('');
+  // Esito dell'ultimo invio del codice: il modal lo usa per mostrare errori e far ripartire il conto alla rovescia
+  const [otpStatus, setOtpStatus] = useState<OtpStatus>({ error: null, resendAfterSeconds: 60, stamp: 0 });
 
   // Friendships state
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState<boolean>(false);
@@ -303,8 +321,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 name: firebaseUser.displayName || 'Utente Google',
                 email: firebaseUser.email || 'utente@gmail.com',
                 avatarUrl: firebaseUser.photoURL || undefined,
-                isEmailVerified: true,
-                plan: 'pro',
+                isEmailVerified: firebaseUser.emailVerified,
+                plan: firebaseUser.providerData.some((p) => p.providerId === 'google.com') ? 'pro' : 'free',
                 googleConnected: workspaceConnected,
                 createdAt: new Date().toISOString(),
                 monthlyUsage: {
@@ -319,6 +337,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               ...prev,
               googleConnected: workspaceConnected,
               avatarUrl: firebaseUser.photoURL || prev.avatarUrl,
+              isEmailVerified: firebaseUser.emailVerified,
             };
           });
 
@@ -329,7 +348,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       },
       () => {
-        // Not authenticated
+        // Nessuna sessione Firebase valida: un eventuale profilo salvato in locale (vecchio login "finto")
+        // non può chiamare il backend, quindi si riparte dalla schermata di accesso.
+        setUser((prev) => (prev ? null : prev));
       }
     );
 
@@ -439,93 +460,107 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Auth Operations
-  const loginWithEmail = async (email: string, _pass: string): Promise<boolean> => {
-    const defaultName = email.split('@')[0].replace(/[._]/g, ' ');
-    const formattedName = defaultName.charAt(0).toUpperCase() + defaultName.slice(1);
+  const emptyUsage = () => ({
+    summariesUsed: 0,
+    chatsUsed: 0,
+    minutesRecorded: 0,
+    month: new Date().toISOString().substring(0, 7),
+  });
 
+  const loginWithEmail = async (email: string, pass: string): Promise<boolean> => {
+    let fbUser;
+    try {
+      fbUser = await loginEmailAccount(email.trim(), pass);
+    } catch (err) {
+      throw new Error(friendlyAuthError(err));
+    }
+
+    const fallbackName = (fbUser.email || email).split('@')[0].replace(/[._]/g, ' ');
     const loggedUser: UserProfile = {
-      id: `usr_${Date.now()}`,
-      name: formattedName || 'Professionista',
-      email: email,
-      isEmailVerified: true,
+      id: fbUser.uid,
+      name: fbUser.displayName || fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1) || 'Professionista',
+      email: fbUser.email || email.trim(),
+      avatarUrl: fbUser.photoURL || undefined,
+      isEmailVerified: fbUser.emailVerified,
       plan: 'pro',
       googleConnected: false,
       createdAt: new Date().toISOString(),
-      monthlyUsage: {
-        summariesUsed: 0,
-        chatsUsed: 0,
-        minutesRecorded: 0,
-        month: new Date().toISOString().substring(0, 7),
-      },
+      monthlyUsage: emptyUsage(),
     };
     setUser(loggedUser);
 
-    // Invia email di benvenuto via EmailJS
-    sendWelcomeEmail(email, formattedName || 'Professionista').catch((err) =>
-      console.warn('[EmailJS] Welcome email notification caught error:', err)
-    );
+    if (!fbUser.emailVerified) {
+      // Account esistente ma email non ancora confermata: si resta fuori finché non la conferma
+      setPendingOtpEmail(loggedUser.email);
+      setIsOtpModalOpen(true);
+      sendEmailCode(loggedUser.name).catch(() => {});
+      return false;
+    }
+
     triggerSuccess('Accesso effettuato! Benvenuto su Recall.');
     return true;
   };
 
-  const registerWithEmail = async (name: string, email: string, _pass: string): Promise<string> => {
-    const randomOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    setPendingOtpCode(randomOtp);
-    setPendingOtpEmail(email);
-
-    // Invia codice OTP via EmailJS se configurato
-    const otpResult = await sendOtpEmail(email, name || 'Utente', randomOtp);
-    if (!otpResult.success) {
-      throw new Error(`Errore EmailJS: ${otpResult.message}. Assicurati che l'Email Service ID e la Public Key nelle impostazioni di EmailJS siano corretti e che il servizio sia attivo.`);
+  const registerWithEmail = async (name: string, email: string, pass: string): Promise<void> => {
+    let fbUser;
+    try {
+      fbUser = await registerEmailAccount(name, email.trim(), pass);
+    } catch (err) {
+      throw new Error(friendlyAuthError(err));
     }
 
     const newUser: UserProfile = {
-      id: `usr_${Date.now()}`,
+      id: fbUser.uid,
       name: name || 'Utente',
-      email: email,
+      email: fbUser.email || email.trim(),
       isEmailVerified: false,
       plan: 'free',
       googleConnected: false,
       createdAt: new Date().toISOString(),
-      monthlyUsage: {
-        summariesUsed: 0,
-        chatsUsed: 0,
-        minutesRecorded: 0,
-        month: new Date().toISOString().substring(0, 7),
-      },
+      monthlyUsage: emptyUsage(),
     };
     setUser(newUser);
+    setPendingOtpEmail(newUser.email);
     setIsOtpModalOpen(true);
-    return randomOtp;
+    sendEmailCode(newUser.name).catch(() => {});
   };
 
-  const verifyOtp = (code: string): boolean => {
-    if (code.trim() === pendingOtpCode.trim() || code.trim() === '123456') {
-      if (user) {
-        setUser({ ...user, isEmailVerified: true });
-        // Invia email di benvenuto dopo la verifica dell'account
-        sendWelcomeEmail(user.email, user.name).catch((err) =>
-          console.warn('[EmailJS] Welcome email post-verify error:', err)
-        );
-        triggerSuccess('Account verificato! Email di benvenuto inviata.');
-      }
-      setIsOtpModalOpen(false);
-      try {
-        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-      } catch (e) {}
-      return true;
+  // Chiede al server di inviare il codice e ne memorizza l'esito (anche l'errore) per il modal
+  const sendEmailCode = async (name?: string): Promise<void> => {
+    try {
+      const r = await requestEmailOtp(name);
+      setOtpStatus({ error: null, resendAfterSeconds: r.resendAfterSeconds, stamp: Date.now() });
+    } catch (err: any) {
+      const wait = err instanceof OtpError && err.retryAfterSeconds ? err.retryAfterSeconds : 0;
+      setOtpStatus({ error: err?.message || 'Invio del codice non riuscito.', resendAfterSeconds: wait, stamp: Date.now() });
+      throw err;
     }
-    return false;
   };
 
-  const resendOtp = async (): Promise<{ success: boolean; message: string; code: string }> => {
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    setPendingOtpCode(newOtp);
-    if (pendingOtpEmail) {
-      const res = await sendOtpEmail(pendingOtpEmail, user?.name || 'Utente', newOtp);
-      return { success: res.success, message: res.message, code: newOtp };
+  // Chiamata dal modal con le 6 cifre: se il server le accetta l'email risulta verificata su Firebase
+  const verifyEmailCode = async (code: string): Promise<void> => {
+    await verifyEmailOtp(code); // lancia un errore con il messaggio da mostrare se il codice è sbagliato
+
+    const verified = await refreshEmailVerified(); // rinnova il token: da ora il server vede email_verified = true
+    if (!verified) {
+      throw new Error('Codice accettato, ma l\'account non si è ancora aggiornato. Riprova tra qualche secondo.');
     }
-    return { success: false, message: 'Nessuna email salvata in sospeso.', code: newOtp };
+
+    if (user) {
+      setUser({ ...user, isEmailVerified: true });
+      sendWelcomeEmail(user.email, user.name).catch((err) =>
+        console.warn('[EmailJS] Welcome email post-verify error:', err)
+      );
+    }
+    triggerSuccess('Account verificato! Benvenuto su Recall.');
+    setIsOtpModalOpen(false);
+    try {
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+    } catch (e) {}
+  };
+
+  const resendVerificationEmail = async (): Promise<void> => {
+    await sendEmailCode(user?.name);
   };
 
   const loginWithGoogle = async (): Promise<boolean> => {
@@ -738,7 +773,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchFriends = async () => {
     if (!user?.email) return;
     try {
-      const res = await fetch(`/api/friends/list?email=${encodeURIComponent(user.email)}`);
+      const res = await apiFetch('/api/friends/list');
       const data = await res.json();
       if (data.success) {
         setFriendsList(data.friends || []);
@@ -774,11 +809,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const sendFriendRequest = async (receiverEmail: string) => {
     if (!user?.email) return { success: false, error: 'Devi effettuare l’accesso per aggiungere amici' };
     try {
-      const res = await fetch('/api/friends/request', {
+      const res = await apiFetch('/api/friends/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          senderEmail: user.email,
           receiverEmail: receiverEmail,
         }),
       });
@@ -802,12 +836,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const respondFriendRequest = async (friendshipId: string, action: 'accept' | 'reject') => {
     if (!user?.email) return false;
     try {
-      const res = await fetch('/api/friends/respond', {
+      const res = await apiFetch('/api/friends/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           friendshipId,
-          email: user.email,
           action,
         }),
       });
@@ -835,7 +868,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.history.replaceState({}, document.title, newUrl);
 
       // Validate the token to greet the user or log it
-      fetch(`/api/invitations/validate?token=${token}`)
+      apiFetch(`/api/invitations/validate?token=${encodeURIComponent(token)}`)
         .then(r => r.json())
         .then(res => {
           if (res.success) {
@@ -852,11 +885,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const savedInviteToken = sessionStorage.getItem('inviteToken') || undefined;
 
       // Sync user profile on backend
-      fetch('/api/users/sync', {
+      apiFetch('/api/users/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: user.email.toLowerCase().trim(),
           name: user.name,
           inviteToken: savedInviteToken,
           language: localStorage.getItem('RECALL_LANGUAGE') || 'it',
@@ -882,7 +914,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [user?.email, user?.isEmailVerified]);
 
   return (
     <AppContext.Provider
@@ -908,7 +940,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsUpgradeModalOpen,
         isOtpModalOpen,
         setIsOtpModalOpen,
-        pendingOtpCode,
         pendingOtpEmail,
         isAddFriendModalOpen,
         setIsAddFriendModalOpen,
@@ -923,8 +954,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithEmail,
         registerWithEmail,
         loginWithGoogle,
-        verifyOtp,
-        resendOtp,
+        verifyEmailCode,
+        resendVerificationEmail,
+        otpStatus,
         logout,
         toggleTheme,
         setPlan,
