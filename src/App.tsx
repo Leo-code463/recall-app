@@ -17,8 +17,15 @@ import { SuccessBadge } from './components/SuccessBadge';
 import { CalendarPreviewModal } from './components/CalendarPreviewModal';
 import { AddFriendModal } from './components/AddFriendModal';
 import { motion, AnimatePresence } from 'motion/react';
-import { triggerHaptic } from './utils/haptic';
 import { NavTab } from './types';
+
+/** Contenitore comune: sfondo sfumato "glass" fisso dietro a ogni schermata. */
+const GlassShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="ds min-h-screen text-[#16161E] dark:text-[#FCFCFC] transition-colors flex flex-col font-['Inter',sans-serif] overflow-x-clip">
+    <div aria-hidden className="glass-bg pointer-events-none fixed inset-0 -z-10" />
+    {children}
+  </div>
+);
 
 const AppContent: React.FC = () => {
   const { isLoggedIn, activeTab, setActiveTab, activeMeetingId, successAnimation, isSettingsModalOpen, calendarPreviewData } = useApp();
@@ -33,13 +40,17 @@ const AppContent: React.FC = () => {
 
   if (!isLoggedIn) {
     if (showWelcome) {
-      return <WelcomeView onStart={() => setShowWelcome(false)} />;
+      return (
+        <GlassShell>
+          <WelcomeView onStart={() => setShowWelcome(false)} />
+        </GlassShell>
+      );
     }
     return (
-      <>
+      <GlassShell>
         <AuthModal />
         <OtpModal />
-      </>
+      </GlassShell>
     );
   }
 
@@ -64,9 +75,9 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-[#FCFCFC] transition-colors flex flex-col font-['Inter',sans-serif] overflow-x-hidden">
+    <GlassShell>
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-10 pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-28 sm:pb-24">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-10 pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeMeetingId ? `meeting-${activeMeetingId}` : isSettingsModalOpen ? 'settings' : activeTab}
@@ -93,7 +104,7 @@ const AppContent: React.FC = () => {
 
       {/* Global Success Overlay Badge */}
       <SuccessBadge isVisible={successAnimation.isVisible} message={successAnimation.message} />
-    </div>
+    </GlassShell>
   );
 };
 

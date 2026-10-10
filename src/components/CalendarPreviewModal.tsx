@@ -62,9 +62,9 @@ export const CalendarPreviewModal: React.FC = () => {
       <div className="glass-card w-full sm:max-w-md rounded-t-3xl ...">
         
         {/* Header */}
-        <div className="p-5 border-b border-gray-100 dark:border-[#272B30] flex items-center justify-between">
+        <div className="p-5 border-b border-[#ECEBF3] dark:border-white/10 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-black text-[#1A1A1A] dark:text-white">
+            <h2 className="text-sm font-black text-[#16161E] dark:text-white">
               Nuovo evento
             </h2>
             <p className="text-[10px] font-bold text-gray-400 dark:text-neutral-400 uppercase tracking-tight">
@@ -90,7 +90,7 @@ export const CalendarPreviewModal: React.FC = () => {
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-xs font-bold rounded-xl border border-gray-100 dark:border-[#272B30] bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6C5DD3]"
+              className="w-full px-3.5 py-2.5 text-xs font-bold rounded-xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6A49D8]"
               required
             />
           </div>
@@ -106,7 +106,7 @@ export const CalendarPreviewModal: React.FC = () => {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-gray-100 dark:border-[#272B30] bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6C5DD3]"
+                className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6A49D8]"
                 required
               />
             </div>
@@ -122,7 +122,7 @@ export const CalendarPreviewModal: React.FC = () => {
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   placeholder="10:00"
-                  className="w-full text-center px-2 py-2 text-xs font-bold rounded-xl border border-gray-100 dark:border-[#272B30] bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6C5DD3]"
+                  className="w-full text-center px-2 py-2 text-xs font-bold rounded-xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6A49D8]"
                   required
                 />
                 <span className="text-xs text-gray-400 font-bold">-</span>
@@ -131,7 +131,7 @@ export const CalendarPreviewModal: React.FC = () => {
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                   placeholder="10:45"
-                  className="w-full text-center px-2 py-2 text-xs font-bold rounded-xl border border-gray-100 dark:border-[#272B30] bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6C5DD3]"
+                  className="w-full text-center px-2 py-2 text-xs font-bold rounded-xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6A49D8]"
                   required
                 />
               </div>
@@ -147,7 +147,7 @@ export const CalendarPreviewModal: React.FC = () => {
             <select
               value={reminder}
               onChange={(e) => setReminder(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-xs font-bold rounded-xl border border-gray-100 dark:border-[#272B30] bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6C5DD3]"
+              className="w-full px-3.5 py-2.5 text-xs font-bold rounded-xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6A49D8]"
             >
               <option value="15 minuti prima">15 minuti prima</option>
               <option value="30 minuti prima">30 minuti prima</option>
@@ -159,14 +159,14 @@ export const CalendarPreviewModal: React.FC = () => {
           {/* AI description field */}
           <div className="space-y-1">
             <label className="text-[10px] font-extrabold uppercase text-gray-400 dark:text-neutral-500 tracking-wider flex items-center gap-1.5">
-              <FileText className="w-3 h-3 text-[#6C5DD3]" />
-              <span className="text-[#6C5DD3] dark:text-[#A798F8]">Descrizione generata dall'IA</span>
+              <FileText className="w-3 h-3 text-[#6A49D8]" />
+              <span className="text-[#6A49D8] dark:text-[#A088F9]">Descrizione generata dall'IA</span>
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              className="w-full px-3.5 py-2.5 text-xs leading-normal rounded-xl border border-gray-100 dark:border-[#272B30] bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6C5DD3]"
+              className="w-full px-3.5 py-2.5 text-xs leading-normal rounded-xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6A49D8]"
               required
             />
           </div>
@@ -176,14 +176,14 @@ export const CalendarPreviewModal: React.FC = () => {
             <button
               type="button"
               onClick={() => setCalendarPreviewData(null)}
-              className="flex-1 py-2.5 border border-gray-200 dark:border-[#272B30] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#1A1A1A] dark:text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              className="flex-1 py-2.5 border border-white/70 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
             >
               Annulla
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="flex-1 py-2.5 bg-[#6C5DD3] hover:bg-[#5b4cb8] text-white text-xs font-extrabold rounded-xl shadow-md shadow-[#6C5DD3]/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="flex-1 py-2.5 bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-extrabold rounded-xl shadow-md shadow-[#6A49D8]/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               {isSaving ? (
                 <>

@@ -1,22 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
-import { triggerHaptic } from '../utils/haptic';
+import { hapticTap } from '../utils/haptic';
 import {
   Mic,
-  Calendar,
   Clock,
-  Video,
-  CheckCircle2,
   Plus,
   RefreshCw,
   Inbox,
-  AlertCircle,
-  Settings,
-  ArrowRight,
   Sparkles,
-  User,
   Bell,
+  Check,
+  ChevronRight,
 } from 'lucide-react';
 import { AILogo } from './AILogo';
 
@@ -47,6 +42,15 @@ export const DashboardView: React.FC = () => {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  // Lo sfondo sfocato dell'header compare solo quando la pagina scorre
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // Next upcoming meeting
   const nextMeeting = upcomingEvents.length > 0 ? upcomingEvents[0] : {
@@ -74,6 +78,24 @@ export const DashboardView: React.FC = () => {
       return new Date(startDateStr).toLocaleDateString([], { day: 'numeric', month: 'short' });
     } catch {
       return t('inMinutes').replace('{mins}', '25');
+    }
+  };
+
+  // Etichetta "Oggi, 09:30" / "Ieri, 16:00" / "12 ott, 18:45" calcolata dalla data reale della riunione
+  const formatMeetingDateTime = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      const isIt = language === 'it';
+      const time = d.toLocaleTimeString(isIt ? 'it-IT' : 'en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+      const dayDiff = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+      if (dayDiff === 0) return `${isIt ? 'Oggi' : 'Today'}, ${time}`;
+      if (dayDiff === 1) return `${isIt ? 'Ieri' : 'Yesterday'}, ${time}`;
+      const day = d.toLocaleDateString(isIt ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'short' });
+      return `${day}, ${time}`;
+    } catch {
+      return '';
     }
   };
 
@@ -113,43 +135,70 @@ export const DashboardView: React.FC = () => {
     });
   };
 
+  /* ---------- Stile "Glassmorphism" (palette ricavata dal video di riferimento) ---------- */
+  const GLASS =
+    'bg-white/75 backdrop-blur-xl border border-white/70 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:bg-white/[0.06] dark:border-white/10 dark:shadow-none';
+  const INK = 'text-[#16161E] dark:text-white';
+  const MUTED = 'text-[#6D6D77] dark:text-[#ADACB5]';
+  const PRIMARY_TEXT = 'text-[#6A49D8] dark:text-[#B29FFF]';
+  const BTN_PRIMARY =
+    'inline-flex items-center justify-center gap-1.5 rounded-full bg-[#6A49D8] text-white font-semibold shadow-[0_6px_18px_-6px_rgba(106,73,216,0.55)] transition-all hover:bg-[#5B3CC4] active:scale-95 cursor-pointer dark:bg-[#A088F9] dark:text-[#14101F] dark:hover:bg-[#B29FFF] dark:shadow-none';
+  const TEAL_TEXT = 'text-[#0EBFA2] dark:text-[#5DE6CF]';
+  // Colori delle card "Discussioni recenti": alternano viola e verde acqua come nel video
+  const CARD_TONES = [
+    {
+      iconBox: 'bg-[#E4DAF7] text-[#6A49D8] dark:bg-white/10 dark:text-[#B29FFF]',
+      chip: 'bg-[#E9E3FA] text-[#6A49D8] dark:bg-[#3B2F5C] dark:text-[#B29FFF]',
+    },
+    {
+      iconBox: 'bg-[#D4F3EC] text-[#0EBFA2] dark:bg-white/10 dark:text-[#5DE6CF]',
+      chip: 'bg-[#DBF2EF] text-[#0EBFA2] dark:bg-[#1F3B3A] dark:text-[#5DE6CF]',
+    },
+  ];
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 max-w-2xl mx-auto pb-16">
-      
-      {/* 1. Welcome Greeting Area matching video exactly */}
-      <div className="flex items-center justify-between pt-2">
-        <div className="space-y-0.5">
-          <span className="font-['Inter'] font-sans main-greeting-bold text-[11px] text-gray-400 dark:text-neutral-500 tracking-normal uppercase">
-            {t('goodMorning')}
-          </span>
-          <h1 className="font-['Inter'] font-sans main-greeting-bold text-[21px] tracking-tight text-[#1A1A1A] dark:text-white leading-none">
+    <div className="ds space-y-7 animate-in fade-in duration-300 max-w-2xl mx-auto pb-16">
+      {/* ===== 1. Header sticky =====
+          I margini negativi/padding ripetono quelli di <main> (incluso il safe-area della status bar Android):
+          l'header parte dal bordo alto e lo sfondo sfocato copre anche la status bar. */}
+      <div
+        className={`sticky top-0 z-50 -mx-3 sm:mx-0 px-3 sm:px-0 -mt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:-mt-[calc(1.5rem+env(safe-area-inset-top,0px))] pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-3 flex items-center justify-between gap-3 transition-all duration-200 ${
+          scrolled ? 'bg-[#F5F3FD]/75 backdrop-blur-xl dark:bg-[#0F0D18]/70' : 'bg-transparent'
+        }`}
+      >
+        <div className="min-w-0">
+          <p className={`text-[15px] leading-5 ${MUTED}`}>{t('goodMorning')}</p>
+          <h1 className={`font-display text-[26px] font-semibold leading-8 tracking-tight truncate ${INK}`}>
             {user?.name || 'Leonardo Fiorot'}
           </h1>
         </div>
-        
-        {/* Profile page action and Notifications Bell buttons */}
+
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* Notification Bell Button */}
+          {/* Campanella notifiche */}
           <button
             id="dashboard-notifications-btn"
             onClick={() => {
+              hapticTap('light');
               setIsSettingsModalOpen(true);
               setShowFriendsSetting(true);
             }}
-            className="w-9 h-9 rounded-full bg-white dark:bg-[#1A1D1F] border border-gray-200/50 dark:border-[#272B30] flex items-center justify-center shadow-3xs hover:scale-105 active:scale-95 transition-all cursor-pointer relative"
+            className={`relative w-11 h-11 rounded-full flex items-center justify-center active:scale-95 transition-transform cursor-pointer ${GLASS}`}
             title={t('viewNotificationsAndFriends')}
           >
-            <Bell className="w-4.5 h-4.5 text-gray-600 dark:text-neutral-300" />
+            <Bell className={`w-5 h-5 ${INK}`} strokeWidth={1.9} />
             {friendsReceivedPending.length > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 border border-white dark:border-[#1A1D1F] rounded-full animate-pulse" />
+              <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-[#F43F6E] border-2 border-white dark:border-[#1B1926] rounded-full" />
             )}
           </button>
 
-          {/* Profile Button */}
+          {/* Profilo */}
           <button
             id="dashboard-profile-btn"
-            onClick={() => setActiveTab('profile')}
-            className="w-9 h-9 rounded-full bg-white dark:bg-[#1A1D1F] border border-gray-200/50 dark:border-[#272B30] flex items-center justify-center shadow-3xs hover:scale-105 active:scale-95 transition-all cursor-pointer relative overflow-hidden"
+            onClick={() => {
+              hapticTap('light');
+              setActiveTab('profile');
+            }}
+            className={`w-11 h-11 rounded-full flex items-center justify-center overflow-hidden active:scale-95 transition-transform cursor-pointer ${GLASS}`}
             title={t('viewProfileAndSettings')}
           >
             {user?.avatarUrl ? (
@@ -160,52 +209,50 @@ export const DashboardView: React.FC = () => {
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <User className="w-4.5 h-4.5 text-gray-600 dark:text-neutral-300" />
+              <span className={`text-sm font-semibold ${PRIMARY_TEXT}`}>
+                {(user?.name || 'L')
+                  .split(' ')
+                  .filter(Boolean)
+                  .map((n) => n[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase()}
+              </span>
             )}
           </button>
         </div>
       </div>
 
-      {/* 2. Standalone "Prossima riunione" capsule card styled exactly like the video */}
+      {/* ===== 2. Prossima riunione ===== */}
       {nextMeeting && (
-        <div className="bg-[#761EAF]/15 dark:bg-[#761EAF]/10 rounded-[22px] p-4 flex items-center justify-between gap-3.5 border border-transparent transition-all shadow-2xs">
-          <div className="flex items-center gap-3.5 min-w-0">
-            {/* Rounded Circle Icon Wrapper */}
-            <div className="w-11 h-11 rounded-full bg-[#761EAF]/25 dark:bg-[#761EAF]/20 flex items-center justify-center shrink-0">
-              <Clock className="w-5 h-5 text-[#761EAF] dark:text-[#C084FC]" />
-            </div>
-            
-            {/* Text Content */}
-            <div className="min-w-0 space-y-0.5">
-              <div className="text-[10.5px] font-black text-[#761EAF] dark:text-[#C084FC] flex items-center gap-1.5 tracking-tight uppercase">
-                <span className="text-[8.5px] font-bold">{t('nextMeeting')}</span>
-                <span>•</span>
-                <span className="normal-case font-bold">{getRelativeTimeString(nextMeeting.start)}</span>
-              </div>
-              <h3 className="text-[14px] sm:text-[15px] font-black text-[#1A1A1A] dark:text-white truncate leading-tight">
-                {nextMeeting.title}
-              </h3>
-            </div>
+        <div className="rounded-[26px] p-4 flex items-center gap-3.5 bg-[#EAE8FE]/90 border border-white/70 shadow-[0_10px_40px_-16px_rgba(106,73,216,0.3)] dark:bg-[#302850]/80 dark:border-white/10 dark:shadow-none">
+          <div className="w-14 h-14 rounded-2xl bg-[#D6CFF9] dark:bg-white/10 flex items-center justify-center shrink-0">
+            <Clock className={`w-6 h-6 ${PRIMARY_TEXT}`} strokeWidth={1.9} />
           </div>
 
-          {/* Action Button */}
+          <div className="min-w-0 flex-1">
+            <p className={`text-[13px] font-medium leading-snug ${PRIMARY_TEXT}`}>
+              {t('nextMeeting')} · {getRelativeTimeString(nextMeeting.start)}
+            </p>
+            <h3 className={`font-display text-base font-semibold leading-snug truncate mt-0.5 ${INK}`}>
+              {nextMeeting.title}
+            </h3>
+          </div>
+
           <div className="shrink-0">
             {nextMeeting.meetUrl ? (
               <a
                 href={nextMeeting.meetUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4.5 py-1.5 bg-[#761EAF] hover:bg-[#681898] text-white text-[11px] font-black rounded-full shadow-3xs hover:scale-[1.03] active:scale-95 transition-all inline-flex items-center justify-center cursor-pointer"
+                className={`${BTN_PRIMARY} h-10 px-5 text-sm`}
               >
                 {t('join')}
               </a>
             ) : (
               <button
-                onClick={() => {
-                  triggerHaptic(20);
-                  setIsRecordingModalOpen(true);
-                }}
-                className="px-4.5 py-1.5 bg-[#761EAF] hover:bg-[#681898] text-white text-[11px] font-black rounded-full shadow-3xs hover:scale-[1.03] active:scale-95 transition-all cursor-pointer"
+                onClick={() => setIsRecordingModalOpen(true)}
+                className={`${BTN_PRIMARY} h-10 px-5 text-sm`}
               >
                 {t('record')}
               </button>
@@ -214,199 +261,170 @@ export const DashboardView: React.FC = () => {
         </div>
       )}
 
-      {/* 3. DISCUSSIONS RECENTI - Horizontal scrolling list matching video perfectly */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between pl-1">
-          <h2 className="text-base font-black text-[#1A1A1A] dark:text-white">
-            {t('recentDiscussions')}
-          </h2>
+      {/* ===== 3. Discussioni recenti ===== */}
+      <section className="space-y-3.5">
+        <div className="flex items-center justify-between">
+          <h2 className={`font-display text-lg font-semibold ${INK}`}>{t('recentDiscussions')}</h2>
           <button
-            onClick={() => {
-              triggerHaptic(12);
-              setActiveTab('search');
-            }}
-            className="text-[#761EAF] hover:text-[#681898] dark:text-[#C084FC] dark:hover:text-[#C084FC] text-[11px] font-black cursor-pointer transition-colors"
+            onClick={() => setActiveTab('search')}
+            className={`text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 ${PRIMARY_TEXT}`}
           >
             {t('viewAll')}
           </button>
         </div>
 
-        <div className="flex gap-4 overflow-x-auto pb-2 pt-1 scrollbar-none snap-x">
-          {meetings.map((meet) => (
-            <div
-              key={meet.id}
-              onClick={() => {
-                triggerHaptic(15);
-                setActiveMeetingId(meet.id);
-              }}
-              className="snap-start shrink-0 w-[235px] bg-white dark:bg-[#1A1D1F] p-4 rounded-[22px] border border-gray-100 dark:border-[#272B30] hover:border-[#761EAF]/40 dark:hover:border-[#761EAF]/40 shadow-3xs active:scale-[0.98] transition-all cursor-pointer flex flex-col justify-between h-[155px]"
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  {/* Soft round icon */}
-                  <div className="w-8 h-8 rounded-full bg-[#761EAF]/10 dark:bg-[#761EAF]/20 flex items-center justify-center">
-                    <Mic className="w-4 h-4 text-[#761EAF] dark:text-[#C084FC]" />
-                  </div>
-                  {/* Date marker */}
-                  <span className="text-[10px] font-bold text-gray-400 dark:text-neutral-500">
-                    {meet.id === 'product-sync-q3' 
-                      ? (language === 'it' ? 'Oggi, 09:30' : 'Today, 09:30') 
-                      : (language === 'it' ? 'Ieri, 16:00' : 'Yesterday, 16:00')}
-                  </span>
-                </div>
-
-                <h3 className="text-xs font-black text-[#1A1A1A] dark:text-white line-clamp-2 leading-snug">
-                  {meet.title}
-                </h3>
-
-                {/* Sub tags */}
-                <div className="flex flex-wrap gap-1 pt-0.5">
-                  {meet.tags.slice(0, 2).map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="text-[9px] font-black px-2 py-0.5 rounded-full bg-[#F5F5F7] dark:bg-[#272B30] text-gray-500 dark:text-neutral-400 uppercase tracking-tight"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Bottom Speakers Overlap */}
-              <div className="flex items-center justify-between pt-1">
-                <div className="flex -space-x-1.5 overflow-hidden">
-                  {meet.speakers.map((spk, idx) => (
-                    <div
-                      key={idx}
-                      title={spk.name}
-                      className="w-5.5 h-5.5 rounded-full border-1.5 border-white dark:border-[#111315] bg-[#761EAF]/10 text-[#761EAF] dark:text-[#C084FC] text-[8px] font-black flex items-center justify-center font-mono uppercase"
-                    >
-                      {spk.name === 'Me' ? 'ME' : spk.name.split(' ').map(n => n[0]).join('')}
+        {meetings.length > 0 ? (
+          <div className="no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0 flex gap-3.5 overflow-x-auto snap-x snap-mandatory scroll-px-3 pb-3 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {meetings.map((meet, cardIdx) => {
+              const tone = CARD_TONES[cardIdx % CARD_TONES.length];
+              return (
+                <div
+                  key={meet.id}
+                  onClick={() => setActiveMeetingId(meet.id)}
+                  className={`snap-start shrink-0 w-[272px] rounded-[28px] p-5 flex flex-col gap-3.5 active:scale-[0.98] transition-transform cursor-pointer ${GLASS}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tone.iconBox}`}>
+                      <Sparkles className="w-[18px] h-[18px]" strokeWidth={1.9} />
                     </div>
-                  ))}
-                </div>
-                <ArrowRight className="w-3.5 h-3.5 text-gray-300 dark:text-neutral-600" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+                    <span className={`text-[13px] ${MUTED}`}>{formatMeetingDateTime(meet.date)}</span>
+                  </div>
 
-      {/* 4. TASK DI OGGI & COMPITI - Vertical stack with Google integration */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between pl-1">
-          <div className="flex items-center gap-1.5">
-            <h2 className="text-base font-black text-[#1A1A1A] dark:text-white">
-              {t('todayTasksTitle')}
-            </h2>
-            <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:bg-purple-500/20 dark:text-[#C084FC] uppercase tracking-wider flex items-center gap-1">
-              <Sparkles className="w-2.5 h-2.5" />
-              <span>Google Tasks</span>
+                  <h3 className={`font-display text-[15px] font-semibold leading-snug line-clamp-2 ${INK}`}>
+                    {meet.title}
+                  </h3>
+
+                  {meet.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {meet.tags.slice(0, 3).map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className={`text-xs font-medium px-2.5 py-1 rounded-full ${tone.chip}`}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between mt-auto pt-0.5">
+                    <div className="flex -space-x-2">
+                      {meet.speakers.map((spk, idx) => (
+                        <div
+                          key={idx}
+                          title={spk.name}
+                          className="w-8 h-8 rounded-full border-2 border-white dark:border-[#1B1926] bg-[#F1EFF9] dark:bg-[#2A2736] text-[11px] font-semibold text-[#16161E] dark:text-white flex items-center justify-center uppercase"
+                        >
+                          {spk.name === 'Me' ? 'ME' : spk.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                        </div>
+                      ))}
+                    </div>
+                    <ChevronRight className={`w-[18px] h-[18px] ${MUTED}`} strokeWidth={1.9} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className={`rounded-[28px] px-5 py-8 text-center text-sm ${GLASS} ${MUTED}`}>
+            {language === 'it'
+              ? 'Nessuna discussione registrata. Tocca il microfono per iniziare.'
+              : 'No recordings yet. Tap the microphone to start.'}
+          </div>
+        )}
+      </section>
+
+      {/* ===== 4. Task di oggi ===== */}
+      <section className="space-y-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-baseline gap-2.5 min-w-0">
+            <h2 className={`font-display text-lg font-semibold ${INK}`}>{t('todayTasksTitle')}</h2>
+            <span className={`inline-flex items-center gap-1 text-[13px] font-medium ${TEAL_TEXT}`}>
+              <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
+              Google Tasks
             </span>
           </div>
 
           <button
             onClick={() => setIsAddingTask(!isAddingTask)}
-            className="text-xs font-black text-[#761EAF] hover:text-[#681898] cursor-pointer flex items-center gap-0.5"
+            className={`inline-flex items-center gap-1 text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 shrink-0 ${PRIMARY_TEXT}`}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="text-[11px]">{t('addTask')}</span>
+            <Plus className="w-4 h-4" strokeWidth={2.2} />
+            {t('addTask')}
           </button>
         </div>
 
-        {/* Quick Add Form inline */}
+        {/* Aggiunta rapida */}
         {isAddingTask && (
-          <form onSubmit={handleCreateTask} className="flex gap-2 p-2 bg-white dark:bg-[#1A1D1F] rounded-2xl border border-gray-100 dark:border-[#272B30] animate-in slide-in-from-top-2 duration-200">
+          <form
+            onSubmit={handleCreateTask}
+            className={`flex gap-2 p-2.5 rounded-[22px] animate-in slide-in-from-top-2 duration-200 ${GLASS}`}
+          >
             <input
               type="text"
               value={newTaskTitle}
               onChange={(e) => setNewTaskTitle(e.target.value)}
               placeholder={t('whatNeedToDo')}
               autoFocus
-              className="flex-1 px-3 py-2 text-xs font-bold rounded-xl border border-gray-100 dark:border-[#272B30] bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#761EAF]"
+              className={`flex-1 min-w-0 h-11 px-4 text-sm rounded-full bg-white/70 dark:bg-white/[0.06] border border-[#E6E3F3] dark:border-white/10 placeholder:text-[#9A98A6] focus:outline-none focus:ring-2 focus:ring-[#6A49D8]/40 ${INK}`}
             />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-[#761EAF] text-white text-xs font-extrabold rounded-xl hover:bg-[#681898] cursor-pointer"
-            >
+            <button type="submit" className={`${BTN_PRIMARY} h-11 px-5 text-sm`}>
               {t('save')}
             </button>
           </form>
         )}
 
-        {/* Action Items List */}
         {todayTasks.length > 0 ? (
-          <div className="space-y-3">
-            {todayTasks.map((task, idx) => {
+          <div className={`rounded-[28px] px-4 ${GLASS}`}>
+            {todayTasks.map((task) => {
               const isTask1 = task.id === 'task-1';
               const isTask2 = task.id === 'task-2';
               const isTask3 = task.id === 'task-3';
-              
+
               const dueTime = isTask1 ? '11:00' : isTask2 ? '14:30' : '17:00';
-              
+
               return (
                 <div
                   key={task.id}
-                  className={`p-3.5 rounded-[22px] border transition-all flex items-center justify-between gap-3.5 ${
-                    task.completed
-                      ? 'bg-gray-50/60 dark:bg-neutral-900/10 border-transparent opacity-60'
-                      : 'bg-white dark:bg-[#1A1D1F] border-gray-100 dark:border-[#272B30] hover:border-[#761EAF]/30 shadow-3xs'
-                  }`}
+                  className="flex items-center gap-3.5 py-4 border-b border-[#ECEBF3] dark:border-white/10 last:border-b-0"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    {/* Checkbox circle trigger */}
-                    <button
-                      onClick={() => {
-                        triggerHaptic(10);
-                        toggleTask(task.id);
-                      }}
-                      className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
-                        task.completed
-                          ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : 'border-gray-200 dark:border-neutral-700 hover:border-[#761EAF]'
+                  {/* Cerchio di completamento */}
+                  <button
+                    onClick={() => toggleTask(task.id)}
+                    className={`w-6 h-6 rounded-full border-[1.5px] flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                      task.completed
+                        ? 'bg-[#6A49D8] border-[#6A49D8] text-white dark:bg-[#A088F9] dark:border-[#A088F9] dark:text-[#14101F]'
+                        : 'border-[#D8D8E0] dark:border-white/20 hover:border-[#6A49D8]'
+                    }`}
+                  >
+                    {task.completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                  </button>
+
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`text-[15px] font-medium leading-snug truncate ${
+                        task.completed ? `line-through ${MUTED}` : INK
                       }`}
                     >
-                      {task.completed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                    </button>
-
-                    <div className="min-w-0 space-y-0.5">
-                      <p
-                        className={`text-xs font-bold leading-normal truncate ${
-                          task.completed
-                            ? 'line-through text-gray-400 dark:text-neutral-500'
-                            : 'text-[#1A1A1A] dark:text-white'
-                        }`}
-                      >
-                        {task.title}
-                      </p>
-                      
-                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 dark:text-neutral-500">
-                        <span>{language === 'it' ? `Oggi, ${dueTime}` : `Today, ${dueTime}`}</span>
-                        {task.notes && (
-                          <>
-                            <span>•</span>
-                            <span className="truncate">{task.notes.split('Sincronizzato da: ')[1] || task.notes}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
+                      {task.title}
+                    </p>
+                    <p className={`text-[13px] mt-0.5 truncate ${MUTED}`}>
+                      {language === 'it' ? `Oggi, ${dueTime}` : `Today, ${dueTime}`}
+                      {task.notes && <> · {task.notes.split('Sincronizzato da: ')[1] || task.notes}</>}
+                    </p>
                   </div>
 
-                  {/* Sync Button Action on the right */}
                   <div className="shrink-0">
                     {task.completed || isTask3 ? (
-                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-tight border border-emerald-100 dark:border-emerald-900/30">
+                      <span className="inline-flex items-center h-8 px-3 rounded-full bg-[#EDEDF2] text-[#6D6D77] text-[13px] font-medium dark:bg-white/10 dark:text-[#ADACB5]">
                         {t('locale')}
                       </span>
                     ) : (
                       <button
-                        onClick={() => {
-                          triggerHaptic(15);
-                          handleTaskSyncClick(task);
-                        }}
-                        className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[10.5px] font-black rounded-full shadow-3xs transition-all flex items-center gap-1 cursor-pointer hover:scale-[1.03] active:scale-[0.97]"
+                        onClick={() => handleTaskSyncClick(task)}
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#DBF2EF] text-[#0EBFA2] text-[13px] font-semibold transition-all hover:brightness-95 active:scale-95 cursor-pointer dark:bg-[#1F3B3A] dark:text-[#5DE6CF]"
                       >
-                        <RefreshCw className="w-3 h-3 animate-[spin_4s_linear_infinite]" />
+                        <RefreshCw className="w-3.5 h-3.5" strokeWidth={2.2} />
                         <span>Sync</span>
                       </button>
                     )}
@@ -416,50 +434,40 @@ export const DashboardView: React.FC = () => {
             })}
           </div>
         ) : (
-          <div className="p-8 text-center rounded-[22px] bg-white dark:bg-[#1A1D1F] border border-dashed border-gray-200 dark:border-[#272B30]">
-            <Inbox className="w-6 h-6 text-gray-300 mx-auto mb-2" />
-            <p className="text-xs font-bold text-gray-400 dark:text-neutral-500">
-              {t('noTasksToday')}
-            </p>
+          <div className={`rounded-[28px] px-5 py-8 text-center ${GLASS}`}>
+            <Inbox className="w-6 h-6 text-[#B8B6C6] mx-auto mb-2" strokeWidth={1.7} />
+            <p className={`text-sm ${MUTED}`}>{t('noTasksToday')}</p>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* 5. Smart AI Scanner Widget (Elegant and clean footer capsule) */}
-      <div className="bg-white dark:bg-[#1A1D1F] p-4 rounded-[22px] border border-gray-100 dark:border-[#272B30] shadow-3xs flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+      {/* ===== 5. Scanner IA dei task ===== */}
+      <div className={`rounded-[28px] p-4 flex items-center justify-between gap-3 ${GLASS}`}>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-11 h-11 rounded-2xl bg-[#E4DAF7] dark:bg-white/10 flex items-center justify-center shrink-0">
             <AILogo size="sm" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-xs font-black text-[#1A1A1A] dark:text-white leading-tight">
-              {t('scan')}
-            </h3>
-            <p className="text-[10px] text-gray-400 dark:text-neutral-500 font-medium truncate">
-              {t('scanSub')}
-            </p>
+            <h3 className={`font-display text-[15px] font-semibold leading-tight ${INK}`}>{t('scan')}</h3>
+            <p className={`text-[13px] truncate mt-0.5 ${MUTED}`}>{t('scanSub')}</p>
           </div>
         </div>
 
         <button
           onClick={analyzeTasksWithAi}
           disabled={isAnalyzingTasks}
-          className="px-3.5 py-1.5 bg-[#761EAF] hover:bg-[#681898] disabled:bg-neutral-200 text-white text-[10.5px] font-black rounded-full shadow-3xs transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+          className={`${BTN_PRIMARY} h-10 px-4 text-sm shrink-0 disabled:opacity-50`}
         >
           {isAnalyzingTasks ? (
             <>
-              <RefreshCw className="w-3 h-3 animate-spin" />
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               <span>{t('scanning')}</span>
             </>
           ) : (
-            <>
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{language === 'it' ? 'Analizza' : 'Analyze'}</span>
-            </>
+            <span>{language === 'it' ? 'Analizza' : 'Analyze'}</span>
           )}
         </button>
       </div>
-
     </div>
   );
 };

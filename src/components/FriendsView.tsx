@@ -45,10 +45,10 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     <div className="space-y-6 animate-in fade-in duration-300">
       
       {/* View Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-100 dark:border-[#272B30]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#ECEBF3] dark:border-white/10">
         <div>
-          <h2 className="text-xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight flex items-center gap-2">
-            <Users className="w-5.5 h-5.5 text-[#761EAF]" />
+          <h2 className="text-xl font-extrabold text-[#16161E] dark:text-white tracking-tight flex items-center gap-2">
+            <Users className="w-5.5 h-5.5 text-[#6A49D8]" />
             <span>{t('friendsAndCollaborationViewTitle')}</span>
           </h2>
           <p className="text-xs text-gray-400 dark:text-neutral-400 font-medium">
@@ -59,7 +59,7 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         {/* Add Friend Trigger Button */}
         <button
           onClick={() => setIsAddFriendModalOpen(true)}
-          className="px-4 py-2.5 bg-[#761EAF] hover:bg-[#681898] text-white text-xs font-black rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 self-start sm:self-auto"
+          className="px-4 py-2.5 bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-black rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 self-start sm:self-auto"
         >
           <UserPlus className="w-4 h-4" />
           <span>{t('addFriendBtn')}</span>
@@ -79,11 +79,11 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
             {friendsReceivedPending.map((req) => (
               <div key={req.friendshipId} className="p-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-purple-50 dark:bg-purple-950/20 text-[#761EAF] dark:text-[#C084FC] flex items-center justify-center font-bold text-xs shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-purple-50 dark:bg-purple-950/20 text-[#6A49D8] dark:text-[#B29FFF] flex items-center justify-center font-bold text-xs shrink-0">
                     {req.name?.charAt(0).toUpperCase() || 'U'}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-black text-[#1A1A1A] dark:text-white truncate">
+                    <p className="text-xs font-black text-[#16161E] dark:text-white truncate">
                       {req.name}
                     </p>
                     <p className="text-[10px] text-gray-400 dark:text-neutral-400 truncate">
@@ -127,25 +127,25 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
           </h3>
           
           {friendsList.length === 0 ? (
-            <div className="bg-white dark:bg-[#1A1D1F] rounded-[24px] border border-gray-100 dark:border-[#272B30] p-8 text-center flex flex-col items-center justify-center space-y-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-[#111315] border border-gray-100 dark:border-[#272B30] flex items-center justify-center text-gray-400 dark:text-neutral-500">
+            <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 p-8 text-center flex flex-col items-center justify-center space-y-3.5 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
+              <div className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-black/25 border border-white/70 dark:border-white/10 flex items-center justify-center text-gray-400 dark:text-neutral-500">
                 <Users className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-bold text-[#1A1A1A] dark:text-white">{t('noFriendsAdded')}</p>
+                <p className="text-xs font-bold text-[#16161E] dark:text-white">{t('noFriendsAdded')}</p>
                 <p className="text-[10px] text-gray-400 dark:text-neutral-400 font-medium max-w-[260px] mx-auto leading-normal">
                   {t('noFriendsAddedDesc')}
                 </p>
               </div>
               <button
                 onClick={() => setIsAddFriendModalOpen(true)}
-                className="px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-[#272B30] dark:hover:bg-neutral-800 text-[#1A1A1A] dark:text-neutral-200 text-[11px] font-bold rounded-lg border border-gray-200 dark:border-[#272B30] cursor-pointer transition-all"
+                className="px-4 py-2 bg-gray-50 hover:bg-[#F1EFF9] dark:bg-white/10 dark:hover:bg-neutral-800 text-[#16161E] dark:text-neutral-200 text-[11px] font-bold rounded-lg border border-white/70 dark:border-white/10 cursor-pointer transition-all"
               >
                 {t('sendFirstInvite')}
               </button>
             </div>
           ) : (
-            <div className="bg-white dark:bg-[#1A1D1F] rounded-[22px] border border-gray-100 dark:border-[#272B30] overflow-hidden divide-y divide-gray-100 dark:divide-[#272B30]">
+            <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 overflow-hidden divide-y divide-gray-100 dark:divide-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
               {friendsList.map((friend) => (
                 <div key={friend.friendshipId} className="p-4 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 min-w-0">
@@ -153,7 +153,7 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                       {friend.name?.charAt(0).toUpperCase() || 'U'}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-black text-[#1A1A1A] dark:text-white truncate">
+                      <p className="text-xs font-black text-[#16161E] dark:text-white truncate">
                         {friend.name}
                       </p>
                       <p className="text-[10px] text-gray-400 dark:text-neutral-400 truncate">
@@ -190,16 +190,16 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
           </h3>
 
           {friendsSentPending.length === 0 ? (
-            <div className="bg-white/50 dark:bg-[#1A1D1F]/40 rounded-[24px] border border-dashed border-gray-200 dark:border-[#272B30] p-6 text-center text-gray-400 dark:text-neutral-500">
+            <div className="bg-white/50 dark:bg-white/[0.06] rounded-[24px] border border-dashed border-white/70 dark:border-white/10 p-6 text-center text-gray-400 dark:text-neutral-500">
               <Clock className="w-5 h-5 mx-auto mb-1.5 opacity-60" />
               <p className="text-[10px] font-bold">{t('noPendingRequests')}</p>
             </div>
           ) : (
-            <div className="bg-white dark:bg-[#1A1D1F] rounded-[22px] border border-gray-100 dark:border-[#272B30] overflow-hidden divide-y divide-gray-100 dark:divide-[#272B30]">
+            <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 overflow-hidden divide-y divide-gray-100 dark:divide-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
               {friendsSentPending.map((req) => (
                 <div key={req.friendshipId} className="p-3.5 flex flex-col gap-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-bold text-[#1A1A1A] dark:text-white truncate">
+                    <p className="text-xs font-bold text-[#16161E] dark:text-white truncate">
                       {req.name || req.email}
                     </p>
                     <span className="px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 text-[8px] font-black uppercase tracking-wider shrink-0 flex items-center gap-0.5">
@@ -226,10 +226,10 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
       </div>
 
       {/* Info Banner about credits */}
-      <div className="p-4 rounded-3xl bg-purple-50/50 dark:bg-[#761EAF]/5 border border-purple-100/50 dark:border-[#761EAF]/10 flex items-start gap-3.5 mt-2">
-        <Sparkles className="w-5 h-5 text-[#761EAF] shrink-0 mt-0.5" />
+      <div className="p-4 rounded-3xl bg-purple-50/50 dark:bg-[#6A49D8]/5 border border-purple-100/50 dark:border-[#6A49D8]/10 flex items-start gap-3.5 mt-2">
+        <Sparkles className="w-5 h-5 text-[#6A49D8] shrink-0 mt-0.5" />
         <div className="space-y-0.5">
-          <h4 className="text-xs font-black text-[#1A1A1A] dark:text-white">
+          <h4 className="text-xs font-black text-[#16161E] dark:text-white">
             {t('referralProgramTitle')}
           </h4>
           <p className="text-[10px] text-gray-500 dark:text-neutral-400 font-medium leading-relaxed">

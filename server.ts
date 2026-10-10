@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import crypto from "crypto";
 import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from "firebase-admin/app";
@@ -117,111 +116,168 @@ function cleanText(value: unknown, maxLen: number): string {
   return value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, maxLen);
 }
 
-// Lazy Google GenAI Client with standard User-Agent header
-let genAIClient: GoogleGenAI | null = null;
-function getGenAI(): GoogleGenAI {
-  if (!genAIClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not configured.");
-    }
-    genAIClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
-  }
-  return genAIClient;
-}
+// --- IA: Ollama locale (API compatibile OpenAI) ---
+// Tutte le richieste di TESTO passano da qui. L'audio NON arriva mai al server:
+// la trascrizione avviene sul dispositivo e il server riceve solo testo.
+const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1").replace(/\/+$/, "");
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
+const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || "ollama"; // fittizia: Ollama non la richiede
+const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || 120_000; // un LLM locale su CPU può essere lento
+// Modelli di riserva opzionali, separati da virgola (es. "llama3.2:1b,qwen2.5:3b")
+const OLLAMA_FALLBACK_MODELS = (process.env.OLLAMA_FALLBACK_MODELS || "")
+  .split(",")
+  .map((m) => m.trim())
+  .filter(Boolean);
+// Limite di caratteri di trascrizione inviati al modello (protegge dal troncamento silenzioso del contesto)
+const MAX_TRANSCRIPT_CHARS = Number(process.env.MAX_TRANSCRIPT_CHARS) || 24_000;
 
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "Recall API", timestamp: new Date().toISOString() });
 });
 
-// Helper to clean mime types (e.g., "audio/webm;codecs=opus" -> "audio/webm")
-function sanitizeAudioMimeType(mime?: string): string {
-  if (!mime) return "audio/webm";
-  const base = mime.split(";")[0].trim().toLowerCase();
-  if (base === "audio/mp3" || base === "audio/mpeg") return "audio/mp3";
-  if (base === "audio/x-m4a" || base === "audio/m4a" || base === "audio/mp4") return "audio/mp4";
-  if (base === "audio/wav" || base === "audio/x-wav") return "audio/wav";
-  if (base === "audio/ogg" || base === "audio/opus") return "audio/ogg";
-  if (base === "audio/flac") return "audio/flac";
-  if (base === "audio/aac") return "audio/aac";
-  if (base === "audio/webm") return "audio/webm";
-  return "audio/webm";
-}
-
-// Safely extract pure Base64 payload from any Data URI (including complex codecs=opus params)
-function extractBase64Payload(dataUriOrBase64?: string): string {
-  if (!dataUriOrBase64) return "";
-  const commaIdx = dataUriOrBase64.indexOf(",");
-  if (commaIdx !== -1) {
-    return dataUriOrBase64.slice(commaIdx + 1).trim();
+// Converte una trascrizione (stringa, segmenti [{speakerName, text}] o altro) in testo compatto per il prompt.
+// Se è troppo lunga tiene inizio e fine, perché Ollama tronca il contesto in silenzio.
+function transcriptToText(transcript: unknown, maxChars: number = MAX_TRANSCRIPT_CHARS): string {
+  let text = "";
+  if (typeof transcript === "string") {
+    text = transcript;
+  } else if (Array.isArray(transcript)) {
+    text = transcript
+      .map((seg: any) => {
+        if (typeof seg === "string") return seg;
+        const who = typeof seg?.speakerName === "string" ? seg.speakerName : typeof seg?.speaker === "string" ? seg.speaker : "";
+        const line = typeof seg?.text === "string" ? seg.text : "";
+        return who && line ? `${who}: ${line}` : line;
+      })
+      .filter(Boolean)
+      .join("\n");
+  } else if (transcript && typeof transcript === "object") {
+    text = JSON.stringify(transcript);
   }
-  return dataUriOrBase64.trim();
+  text = text.replace(/\u0000/g, "").trim();
+  if (text.length > maxChars) {
+    const head = Math.floor(maxChars * 0.6);
+    const tail = maxChars - head;
+    text = `${text.slice(0, head)}\n[... parte centrale omessa per limiti di lunghezza ...]\n${text.slice(-tail)}`;
+  }
+  return text;
 }
 
-// High-speed, lightweight model pools:
-// Audio-optimized models (Flash Lite and Gemini Transcribe for ultra-low latency and fast transcription)
-const AUDIO_MODELS = [
-  "gemini-3.5-flash-lite",
-  "gemini-3.8-flash",
-];
+function describeOllamaError(err: any, model: string): string {
+  const msg: string = err?.message || String(err);
+  if (err?.name === "AbortError") {
+    return `Il servizio IA non ha risposto entro ${Math.round(OLLAMA_TIMEOUT_MS / 1000)} secondi. Riprova.`;
+  }
+  if (/fetch failed|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ETIMEDOUT|ECONNRESET/i.test(msg) || /fetch failed|ECONNREFUSED/i.test(String(err?.cause?.code || err?.cause?.message || ""))) {
+    return `Il servizio IA non è raggiungibile su ${OLLAMA_BASE_URL}. Controlla OLLAMA_BASE_URL e la connessione (con Ollama locale: verifica che sia avviato).`;
+  }
+  if (/HTTP 401|HTTP 403/.test(msg)) {
+    return "Servizio IA non configurato correttamente (OLLAMA_API_KEY mancante o non valida).";
+  }
+  if (/HTTP 429/.test(msg)) {
+    return "Il servizio IA ha raggiunto il limite di richieste del piano gratuito. Riprova tra qualche istante.";
+  }
+  if (/HTTP 404/.test(msg) || /not found/i.test(msg)) {
+    return `Modello IA "${model}" non trovato. Controlla OLLAMA_MODEL (con Ollama locale: ollama pull ${model}).`;
+  }
+  return msg;
+}
 
-// Text-optimized models (Flash Lite is near-instant, minimal token consumption, ultra-efficient)
-const FAST_TEXT_MODELS = [
-  "gemini-3.5-flash-lite",
-  "gemini-3.8-flash",
-];
-
-// Robust Gemini Content Generator with multi-model fallback and high-demand recovery
+// Generatore di testo su Ollama con retry sui modelli di riserva
 async function generateWithModelFallback(params: {
-  contents: any[];
-  responseMimeType?: string;
+  prompt: string;
+  system?: string;
+  json?: boolean;
   temperature?: number;
   models?: string[];
-}): Promise<any> {
-  const ai = getGenAI();
+}): Promise<{ text: string }> {
+  const modelList =
+    params.models && params.models.length > 0 ? params.models : [OLLAMA_MODEL, ...OLLAMA_FALLBACK_MODELS];
+
+  const messages: Array<{ role: "system" | "user"; content: string }> = [];
+  if (params.system) messages.push({ role: "system", content: params.system });
+  messages.push({ role: "user", content: params.prompt });
+
   let lastError: any = null;
-  const modelList = params.models && params.models.length > 0 ? params.models : FAST_TEXT_MODELS;
+  let lastModel = modelList[0];
 
   for (const model of modelList) {
-    try {
-      const config: any = {
-        temperature: params.temperature ?? 0.2,
-      };
-      if (params.responseMimeType) {
-        config.responseMimeType = params.responseMimeType;
-      }
-      if (model.includes("3.5-flash-lite") || model.includes("3.8-flash")) {
-      config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
-      }
-      const response = await ai.models.generateContent({
-        model,
-        contents: params.contents,
-        config,
-      });
+    lastModel = model;
+    // Fino a 2 tentativi per modello: il secondo solo dopo un 429 (limite del piano gratuito), rispettando Retry-After
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
+      let retryAfterMs = 0;
+      try {
+        const response = await fetch(`${OLLAMA_BASE_URL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${OLLAMA_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: params.temperature ?? 0.2,
+            stream: false,
+            ...(params.json ? { response_format: { type: "json_object" } } : {}),
+          }),
+          signal: controller.signal,
+        });
 
-      if (response) {
-        return response;
+        if (!response.ok) {
+          if (response.status === 429 && attempt === 0) {
+            const secs = Number(response.headers.get("retry-after"));
+            retryAfterMs = Math.min(Number.isFinite(secs) && secs > 0 ? secs : 3, 15) * 1000;
+          }
+          const body = await response.text();
+          throw new Error(`Servizio IA HTTP ${response.status}: ${body.slice(0, 300)}`);
+        }
+
+        const data: any = await response.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (typeof text === "string") {
+          return { text };
+        }
+        throw new Error("Risposta del servizio IA priva di contenuto.");
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[AI] Modello ${model} non disponibile: ${String(err?.message || err).slice(0, 160)}.`);
+      } finally {
+        clearTimeout(timer);
       }
-    } catch (err: any) {
-      lastError = err;
-      const errMsg = err?.message || String(err);
-      console.warn(`[Gemini Fast Mode] Model ${model} encountered an issue: ${errMsg.slice(0, 120)}. Switching to next fast candidate...`);
-      // Brief pause if encountering rate-limit or high-demand spikes
-      if (errMsg.includes("high demand") || errMsg.includes("503") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("UNAVAILABLE")) {
-        await new Promise((r) => setTimeout(r, 300));
+      if (retryAfterMs > 0) {
+        await new Promise((r) => setTimeout(r, retryAfterMs));
+        continue;
       }
+      break;
     }
   }
 
-  throw lastError || new Error("I server IA stanno riscontrando un picco temporaneo di richieste. Riprova tra qualche istante.");
+  throw new Error(describeOllamaError(lastError, lastModel));
+}
+
+// Controllo all'avvio: segnala subito se Ollama non è raggiungibile
+async function checkOllamaOnStartup(): Promise<void> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const r = await fetch(`${OLLAMA_BASE_URL}/models`, {
+      headers: { Authorization: `Bearer ${OLLAMA_API_KEY}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data: any = await r.json();
+    const names: string[] = (data?.data || []).map((m: any) => m.id);
+    console.log(`[AI] Servizio raggiungibile su ${OLLAMA_BASE_URL}. Modello predefinito: ${OLLAMA_MODEL}.`);
+    if (names.length > 0 && !names.some((n) => n === OLLAMA_MODEL || n.startsWith(`${OLLAMA_MODEL}:`))) {
+      console.warn(`[AI] Il modello "${OLLAMA_MODEL}" non risulta installato. Con Ollama locale: ollama pull ${OLLAMA_MODEL}`);
+    }
+  } catch (err: any) {
+    console.warn(`[AI] Servizio NON raggiungibile su ${OLLAMA_BASE_URL} (${err?.message || err}). Le funzioni IA falliranno finché non è avviato.`);
+  }
 }
 
 // Robust JSON parser that handles codeblocks and partial JSON safely
@@ -256,18 +312,34 @@ function safeExtractJson(rawText?: string, defaultFallback: any = {}): any {
   }
 }
 
-// HIGH-SPEED UNIFIED API: Audio Processing (Transcription + Diarization + Summary + Actions + Calendar) in 1 Fast Pass!
+// API UNIFICATA: elaborazione di una riunione a partire dal TESTO già trascritto sul dispositivo
+// (trascrizione + segmenti + sintesi + action items + impegni calendario in un solo passaggio).
+// Il server non riceve né elabora audio: eventuali campi audio nel body vengono ignorati.
 app.post("/api/process-meeting", async (req, res) => {
   try {
-    const { audioData, mimeType, liveTranscript, plan, languageHint, referenceDate } = req.body;
-    const ai = getGenAI();
+    const { text, liveTranscript, transcript, plan, languageHint, referenceDate } = req.body;
 
-    const cleanMime = sanitizeAudioMimeType(mimeType);
+    const sourceText = transcriptToText(text ?? liveTranscript ?? transcript);
+    console.log("[process-meeting] tipo:", typeof (text ?? liveTranscript ?? transcript), "| lunghezza:", sourceText.length, "| anteprima:", JSON.stringify(sourceText.slice(0, 200)));
+    if (sourceText.replace(/\s/g, "").length < 15) {
+      return res.status(400).json({
+        success: false,
+        error: "Trascrizione vuota o troppo breve: il riconoscimento vocale sul dispositivo non ha prodotto testo.",
+      });
+    }
+    if (!sourceText) {
+      return res.status(400).json({
+        success: false,
+        error: "Nessun testo da elaborare: trascrivi l'audio sul dispositivo e invia solo il testo.",
+      });
+    }
+
     const todayDate = referenceDate || new Date().toISOString().split("T")[0];
 
-    const prompt = `Sei il motore ad altissima velocità e precisione di Recall per professionisti.
-Elabora l'audio della riunione e genera in un singolo passaggio ultra-veloce:
-1. Trascrizione accurata e speaker diarization (separazione degli interlocutori naturali).
+    const prompt = `Sei il motore di elaborazione di Recall per professionisti.
+Ricevi la TRASCRIZIONE TESTUALE di una riunione, già prodotta sul dispositivo dell'utente (non è disponibile alcun audio).
+Elaborala e genera in un singolo passaggio:
+1. Suddivisione in interventi. Separa gli interlocutori SOLO se il testo lo rende evidente; altrimenti usa un unico "Interlocutore 1". Non inventare contenuti che non sono nel testo.
 2. Sintesi esecutiva ad alto impatto per dirigenti (panoramica, decisioni chiave, argomenti, sentiment, citazioni).
 3. Action items concreti (con incaricato e scadenza dedotta).
 4. Rilevamento impegni per Google Calendar (eventi, follow-up, call future concordate).
@@ -275,7 +347,11 @@ Elabora l'audio della riunione e genera in un singolo passaggio ultra-veloce:
 Data di riferimento: ${todayDate}.
 Lingua principale attesa: ${languageHint || "Italiano"}.
 Livello account: ${plan === "pro" ? "PRO" : "FREE"}.
-${liveTranscript ? `Trascrizione grezza WebSpeech di supporto: "${liveTranscript}"` : ""}
+
+TRASCRIZIONE:
+"""
+${sourceText}
+"""
 
 Restituisci ESCLUSIVAMENTE un JSON valido conforme a questa esatta struttura:
 {
@@ -340,27 +416,13 @@ Restituisci ESCLUSIVAMENTE un JSON valido conforme a questa esatta struttura:
   ]
 }
 
-Se l'audio o il parlato è molto breve o consiste in una frase/appunto rapido, trascrivilo comunque fedelmente e crea una sintesi puntuale e appropriata.`;
-
-    let parts: any[] = [];
-    if (audioData) {
-      const rawBase64 = extractBase64Payload(audioData);
-      if (rawBase64.length > 50) {
-        parts.push({
-          inlineData: {
-            mimeType: cleanMime,
-            data: rawBase64,
-          },
-        });
-      }
-    }
-    parts.push({ text: prompt });
+Il campo "timeOffset" non è disponibile: usa 0. Se il testo è molto breve o è un appunto rapido, riportalo fedelmente e crea comunque una sintesi puntuale e appropriata.`;
 
     const response = await generateWithModelFallback({
-      contents: parts,
-      responseMimeType: "application/json",
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo. I contenuti sono in italiano.",
+      prompt,
+      json: true,
       temperature: 0.2,
-      models: AUDIO_MODELS,
     });
 
     const parsed = safeExtractJson(response.text, {
@@ -368,9 +430,9 @@ Se l'audio o il parlato è molto breve o consiste in una frase/appunto rapido, t
       language: "it",
       category: "Riunione",
       speakers: [{ id: "spk_1", name: "Interlocutore 1", color: "#6C5DD3" }],
-      segments: [{ id: "seg_1", speakerId: "spk_1", speakerName: "Interlocutore 1", timeOffset: 0, text: liveTranscript || "Registrazione completata." }],
+      segments: [{ id: "seg_1", speakerId: "spk_1", speakerName: "Interlocutore 1", timeOffset: 0, text: sourceText }],
       summary: {
-        overview: liveTranscript ? `Registrazione elaborata con successo: ${liveTranscript}` : "Registrazione vocale elaborata con successo.",
+        overview: `Registrazione elaborata con successo: ${sourceText.slice(0, 300)}`,
         keyDecisions: ["Registrazione archiviata e trascritta con successo."],
         mindMap: {
           core: "Conversazione",
@@ -388,15 +450,14 @@ Se l'audio o il parlato è molto breve o consiste in una frase/appunto rapido, t
 
     // Ensure fallback speaker/segments if empty
     if (!parsed.segments || parsed.segments.length === 0) {
-      const fallbackText = liveTranscript || "Trascrizione completata.";
-      parsed.segments = [{ id: "seg_1", speakerId: "spk_1", speakerName: parsed.speakers?.[0]?.name || "Interlocutore 1", timeOffset: 0, text: fallbackText }];
+      parsed.segments = [{ id: "seg_1", speakerId: "spk_1", speakerName: parsed.speakers?.[0]?.name || "Interlocutore 1", timeOffset: 0, text: sourceText }];
     }
     if (!parsed.speakers || parsed.speakers.length === 0) {
       parsed.speakers = [{ id: "spk_1", name: "Interlocutore 1", color: "#6C5DD3" }];
     }
     if (!parsed.summary) {
       parsed.summary = {
-        overview: "Riassunto elaborato da Gemini AI.",
+        overview: "Riassunto elaborato dall'IA.",
         keyDecisions: [],
         actionItems: [],
         topics: [],
@@ -410,25 +471,42 @@ Se l'audio o il parlato è molto breve o consiste in una frase/appunto rapido, t
     console.error("Process meeting error:", error);
     res.status(500).json({
       success: false,
-      error: error.message || "Errore durante l'elaborazione ultra-rapida della riunione",
+      error: error.message || "Errore durante l'elaborazione della riunione",
     });
   }
 });
 
-// API: Audio Transcription & Speaker Diarization (Fast Mode with ThinkingLevel.LOW)
+// API: strutturazione di una trascrizione già prodotta sul dispositivo (titolo, categoria, interlocutori, segmenti).
+// Riceve TESTO (body.text o body.liveTranscript), mai audio.
 app.post("/api/transcribe", async (req, res) => {
   try {
-    const { audioData, mimeType, liveTranscript, plan, languageHint } = req.body;
-    const ai = getGenAI();
+    const { text, liveTranscript, transcript, plan, languageHint } = req.body;
 
-    const cleanMime = sanitizeAudioMimeType(mimeType);
+    const sourceText = transcriptToText(text ?? liveTranscript ?? transcript);
+    console.log("[transcribe] tipo:", typeof (text ?? liveTranscript ?? transcript), "| lunghezza:", sourceText.length, "| anteprima:", JSON.stringify(sourceText.slice(0, 200)));
+    if (sourceText.replace(/\s/g, "").length < 15) {
+      return res.status(400).json({
+        success: false,
+        error: "Trascrizione vuota o troppo breve: il riconoscimento vocale sul dispositivo non ha prodotto testo.",
+      });
+    }
+    if (!sourceText) {
+      return res.status(400).json({
+        success: false,
+        error: "Nessun testo da elaborare: trascrivi l'audio sul dispositivo e invia solo il testo.",
+      });
+    }
 
-    const prompt = `Sei il motore di trascrizione ed intelligenza vocale avanzato di Recall.
-Trascrivi accuratamente l'audio fornito e realizza una separazione degli interlocutori (Speaker Diarization) dettagliata e naturale.
+    const prompt = `Sei il modulo di strutturazione delle trascrizioni di Recall.
+Ricevi una trascrizione testuale già prodotta sul dispositivo dell'utente. Non modificarne il contenuto: dividila in segmenti naturali e, SOLO se il testo lo rende evidente, separa gli interlocutori. Se non è possibile distinguerli usa un unico "Interlocutore 1".
 
 Lingua principale attesa: ${languageHint || "Italiano"}.
 Livello account: ${plan === "pro" ? "PRO" : "FREE"}.
-${liveTranscript ? `Trascrizione grezza preliminare di supporto (WebSpeech): "${liveTranscript}"` : ""}
+
+TRASCRIZIONE:
+"""
+${sourceText}
+"""
 
 Restituisci ESCLUSIVAMENTE un JSON valido con questa esatta struttura:
 {
@@ -448,27 +526,15 @@ Restituisci ESCLUSIVAMENTE un JSON valido con questa esatta struttura:
       "text": "Testo chiaro e puntuale pronunciato dal primo interlocutore..."
     }
   ]
-}`;
+}
 
-    let parts: any[] = [];
-    if (audioData) {
-      const rawBase64 = extractBase64Payload(audioData);
-      if (rawBase64.length > 50) {
-        parts.push({
-          inlineData: {
-            mimeType: cleanMime,
-            data: rawBase64,
-          },
-        });
-      }
-    }
-    parts.push({ text: prompt });
+Il campo "timeOffset" non è disponibile: usa 0.`;
 
     const response = await generateWithModelFallback({
-      contents: parts,
-      responseMimeType: "application/json",
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo.",
+      prompt,
+      json: true,
       temperature: 0.2,
-      models: AUDIO_MODELS,
     });
 
     const parsed = safeExtractJson(response.text, {
@@ -476,24 +542,30 @@ Restituisci ESCLUSIVAMENTE un JSON valido con questa esatta struttura:
       language: "it",
       category: "Riunione",
       speakers: [{ id: "spk_1", name: "Interlocutore 1", color: "#6C5DD3" }],
-      segments: [{ id: "seg_1", speakerId: "spk_1", speakerName: "Interlocutore 1", timeOffset: 0, text: liveTranscript || "Trascrizione completata." }]
+      segments: [{ id: "seg_1", speakerId: "spk_1", speakerName: "Interlocutore 1", timeOffset: 0, text: sourceText }]
     });
+
+    if (!parsed.segments || parsed.segments.length === 0) {
+      parsed.segments = [{ id: "seg_1", speakerId: "spk_1", speakerName: "Interlocutore 1", timeOffset: 0, text: sourceText }];
+    }
+    if (!parsed.speakers || parsed.speakers.length === 0) {
+      parsed.speakers = [{ id: "spk_1", name: "Interlocutore 1", color: "#6C5DD3" }];
+    }
 
     res.json({ success: true, data: parsed });
   } catch (error: any) {
-    console.error("Transcription error:", error);
+    console.error("Transcription structuring error:", error);
     res.status(500).json({
       success: false,
-      error: error.message || "Errore durante la trascrizione audio",
+      error: error.message || "Errore durante l'elaborazione della trascrizione",
     });
   }
 });
 
-// API: AI Meeting Summary & Action Items (Fast Mode with ThinkingLevel.LOW)
+// API: AI Meeting Summary & Action Items
 app.post("/api/summarize", async (req, res) => {
   try {
     const { transcript, meetingTitle } = req.body;
-    const ai = getGenAI();
 
     const prompt = `Sei l'assistente IA esecutivo di Recall.
 Genera una sintesi professionale ad alto impatto per dirigenti e professionisti.
@@ -501,7 +573,7 @@ Genera una sintesi professionale ad alto impatto per dirigenti e professionisti.
 Titolo riunione: "${meetingTitle || "Riunione"}"
 
 Trascrizione completa o segmenti:
-${typeof transcript === "string" ? transcript : JSON.stringify(transcript, null, 2)}
+${transcriptToText(transcript)}
 
 Restituisci ESCLUSIVAMENTE un JSON valido conforme a questo schema:
 {
@@ -535,8 +607,9 @@ Restituisci ESCLUSIVAMENTE un JSON valido conforme a questo schema:
 }`;
 
     const response = await generateWithModelFallback({
-      contents: [{ text: prompt }],
-      responseMimeType: "application/json",
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo. I contenuti sono in italiano.",
+      prompt,
+      json: true,
       temperature: 0.2,
     });
 
@@ -565,11 +638,10 @@ Restituisci ESCLUSIVAMENTE un JSON valido conforme a questo schema:
   }
 });
 
-// API: AI Calendar Commitments Detection from Meeting Transcript (Fast Mode)
+// API: AI Calendar Commitments Detection from Meeting Transcript
 app.post("/api/detect-calendar-events", async (req, res) => {
   try {
     const { transcript, meetingDate } = req.body;
-    const ai = getGenAI();
 
     const todayDate = meetingDate || new Date().toISOString().split("T")[0];
 
@@ -579,7 +651,7 @@ Analizza accuratamente la trascrizione della riunione per identificare TUTTI gli
 Data di riferimento della riunione: ${todayDate}.
 
 Trascrizione:
-${typeof transcript === "string" ? transcript : JSON.stringify(transcript, null, 2)}
+${transcriptToText(transcript)}
 
 Estrai ogni impegno rilevato in formato JSON valido:
 {
@@ -600,8 +672,9 @@ Estrai ogni impegno rilevato in formato JSON valido:
 Se non sono stati citati orari precisi, deduci un orario lavorativo logico (es. 10:00 o 15:00) e durata di 45-60 minuti.`;
 
     const response = await generateWithModelFallback({
-      contents: [{ text: prompt }],
-      responseMimeType: "application/json",
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo. I contenuti sono in italiano.",
+      prompt,
+      json: true,
       temperature: 0.2,
     });
 
@@ -616,11 +689,10 @@ Se non sono stati citati orari precisi, deduci un orario lavorativo logico (es. 
   }
 });
 
-// API: AI Task Inspection (Detect if tasks are meetings or calendar events) (Fast Mode)
+// API: AI Task Inspection (Detect if tasks are meetings or calendar events)
 app.post("/api/analyze-tasks", async (req, res) => {
   try {
     const { tasks, referenceDate } = req.body;
-    const ai = getGenAI();
 
     const todayDate = referenceDate || new Date().toISOString().split("T")[0];
 
@@ -659,8 +731,9 @@ Se un task è una semplice to-do (es. 'Inviare fattura', 'Comprare cavo HDMI', '
 Se un task menziona 'Call', 'Meeting', 'Riunione', 'Incontro', 'Demo', 'Allineamento', 'Visita', 'Colloquio' o include giorni/ore, imposta "isMeetingOrEvent": true con i dettagli del suggestedEvent.`;
 
     const response = await generateWithModelFallback({
-      contents: [{ text: prompt }],
-      responseMimeType: "application/json",
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo. I contenuti sono in italiano.",
+      prompt,
+      json: true,
       temperature: 0.2,
     });
 
@@ -675,11 +748,10 @@ Se un task menziona 'Call', 'Meeting', 'Riunione', 'Incontro', 'Demo', 'Allineam
   }
 });
 
-// API: Interactive AI Chat over Meeting Transcript (Fast Mode)
+// API: Interactive AI Chat over Meeting Transcript
 app.post("/api/chat", async (req, res) => {
   try {
     const { question, transcript, summary, meetingTitle } = req.body;
-    const ai = getGenAI();
 
     const prompt = `Sei l'assistente conversazionale intelligente di Recall.
 Rispondi con massima precisione, tono professionale, cordiale ed efficace in lingua italiana.
@@ -691,7 +763,7 @@ PANORAMICA / RIASSUNTO:
 ${summary ? JSON.stringify(summary, null, 2) : "Nessun riassunto disponibile"}
 
 TRASCRIZIONE COMPLETA:
-${typeof transcript === "string" ? transcript : JSON.stringify(transcript, null, 2)}
+${transcriptToText(transcript)}
 
 DOMANDA DELL'UTENTE:
 ${question}
@@ -699,7 +771,7 @@ ${question}
 Se l'utente ti chiede di formulare una mail di recap, una lista di task o un messaggio Slack per il team, crea il testo pronto per essere copiato ed inviato. Se un dettaglio non è stato menzionato nella riunione, specificalo con trasparenza senza inventare dati.`;
 
     const response = await generateWithModelFallback({
-      contents: [{ text: prompt }],
+      prompt,
       temperature: 0.3,
     });
 
@@ -1592,6 +1664,7 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Recall server active on http://localhost:${PORT}`);
+    void checkOllamaOnStartup();
   });
 }
 

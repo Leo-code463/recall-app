@@ -56,7 +56,7 @@ export const SuccessBadge: React.FC<SuccessBadgeProps> = ({
               stiffness: 280,
               damping: 18,
             }}
-            className="flex flex-col items-center gap-4 glass-card p-7 sm:p-9 rounded-3xl border border-gray-100 dark:border-[#272B30] shadow-2xl max-w-[280px] sm:max-w-xs text-center pointer-events-auto"
+            className="flex flex-col items-center gap-4 glass-card p-7 sm:p-9 rounded-3xl border border-white/70 dark:border-white/10 shadow-2xl max-w-[280px] sm:max-w-xs text-center pointer-events-auto"
           >
             {/* The Rosette Badge / Scalloped Circle */}
             <div className={`relative ${dimensions[size]} flex items-center justify-center`}>
@@ -104,7 +104,7 @@ export const SuccessBadge: React.FC<SuccessBadgeProps> = ({
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.45 }}
-                className="text-xs sm:text-sm font-extrabold text-[#1A1A1A] dark:text-white"
+                className="text-xs sm:text-sm font-extrabold text-[#16161E] dark:text-white"
               >
                 {message}
               </motion.p>

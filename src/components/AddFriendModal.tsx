@@ -71,23 +71,23 @@ export const AddFriendModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 dark:bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-                className="glass-card w-full max-w-md rounded-[28px] shadow-2xl border border-gray-100 dark:border-[#272B30] overflow-hidden p-6 relative animate-in zoom-in-95 duration-200"
+                className="glass-card w-full max-w-md rounded-[28px] shadow-2xl border border-white/70 dark:border-white/10 overflow-hidden p-6 relative animate-in zoom-in-95 duration-200"
       >
         {/* Close Button */}
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#272B30] text-gray-400 hover:text-gray-600 dark:hover:text-neutral-200 transition-colors cursor-pointer"
+          className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#F1EFF9] dark:hover:bg-white/10 text-gray-400 hover:text-gray-600 dark:hover:text-neutral-200 transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Header Icon */}
         <div className="flex items-center gap-3.5 pb-2">
-          <div className="w-10 h-10 rounded-2xl bg-[#761EAF]/10 dark:bg-[#761EAF]/20 flex items-center justify-center text-[#761EAF] dark:text-[#C084FC]">
+          <div className="w-10 h-10 rounded-2xl bg-[#6A49D8]/10 dark:bg-[#6A49D8]/20 flex items-center justify-center text-[#6A49D8] dark:text-[#B29FFF]">
             <UserPlus className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-black text-[#1A1A1A] dark:text-white tracking-tight">
+            <h2 className="text-lg font-black text-[#16161E] dark:text-white tracking-tight">
               Aggiungi un amico
             </h2>
             <p className="text-[10px] text-gray-400 dark:text-neutral-400 font-bold uppercase tracking-wider">
@@ -114,7 +114,7 @@ export const AddFriendModal: React.FC = () => {
             <div className="flex justify-end pt-2">
               <button
                 onClick={handleClose}
-                className="px-5 py-2.5 bg-gray-900 hover:bg-black dark:bg-[#272B30] dark:hover:bg-neutral-700 text-white dark:text-neutral-100 text-xs font-black rounded-xl cursor-pointer transition-colors"
+                className="px-5 py-2.5 bg-gray-900 hover:bg-black dark:bg-white/10 dark:hover:bg-neutral-700 text-white dark:text-neutral-100 text-xs font-black rounded-xl cursor-pointer transition-colors"
               >
                 Chiudi
               </button>
@@ -143,7 +143,7 @@ export const AddFriendModal: React.FC = () => {
                   placeholder="es. amico@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-[#111315] border border-gray-200 dark:border-[#272B30] rounded-xl text-xs font-bold text-[#1A1A1A] dark:text-white placeholder-gray-400 dark:placeholder-neutral-600 focus:outline-hidden focus:border-[#761EAF] dark:focus:border-[#C084FC] focus:ring-1 focus:ring-[#761EAF] transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-black/25 border border-white/70 dark:border-white/10 rounded-xl text-xs font-bold text-[#16161E] dark:text-white placeholder-gray-400 dark:placeholder-neutral-600 focus:outline-hidden focus:border-[#6A49D8] dark:focus:border-[#B29FFF] focus:ring-1 focus:ring-[#6A49D8] transition-all"
                 />
               </div>
             </div>
@@ -166,7 +166,7 @@ export const AddFriendModal: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading || !email.trim()}
-                className="px-5 py-2.5 bg-[#761EAF] hover:bg-[#681898] disabled:opacity-50 text-white text-xs font-black rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                className="px-5 py-2.5 bg-[#6A49D8] hover:bg-[#5B3CC4] disabled:opacity-50 text-white text-xs font-black rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 {isLoading ? (
                   <>

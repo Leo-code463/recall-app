@@ -251,7 +251,7 @@ export const MeetingDetailView: React.FC<{ meetingId: string }> = ({ meetingId }
       let detailText = 'fino a un massimo di 6 nodi chiave, molto sintetico ed essenziale';
       if (mapDetail === 'detailed') detailText = 'fino a un massimo di 11-12 nodi dettagliati, approfondito e ramificato';
 
-      let centralColor = '#761EAF';
+      let centralColor = '#6A49D8';
       let topicColor = '#3B82F6';
       let decisionColor = '#10B981';
 
@@ -356,12 +356,12 @@ ${JSON.stringify(meeting.summary)}
   if (!meeting) {
     return (
       <div className="p-8 text-center glass-card rounded-3xl ...">
-        <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">
+        <p className="text-sm font-bold text-[#16161E] dark:text-white">
           {language === 'it' ? 'Riunione non trovata' : 'Meeting not found'}
         </p>
         <button
           onClick={() => setActiveMeetingId(null)}
-          className="mt-4 px-4 py-2 bg-[#761EAF] text-white text-xs font-bold rounded-xl cursor-pointer"
+          className="mt-4 px-4 py-2 bg-[#6A49D8] text-white text-xs font-bold rounded-xl cursor-pointer"
         >
           {language === 'it' ? 'Torna alla Dashboard' : 'Back to Dashboard'}
         </button>
@@ -464,14 +464,14 @@ ${JSON.stringify(meeting.summary)}
           <button
             id="meeting-detail-back-btn"
             onClick={() => setActiveMeetingId(null)}
-            className="p-2 rounded-xl border border-gray-100 dark:border-[#272B30] bg-white dark:bg-[#1A1D1F] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#1A1A1A] dark:text-white transition-colors cursor-pointer"
+            className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
             title={t('back')}
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-[#761EAF]/10 text-[#761EAF] dark:bg-[#761EAF]/20 dark:text-[#C084FC]">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-[#6A49D8]/10 text-[#6A49D8] dark:bg-[#6A49D8]/20 dark:text-[#B29FFF]">
                 {meeting.category || (language === 'it' ? 'Riunione' : 'Meeting')}
               </span>
               <span className="text-xs font-medium text-gray-400 dark:text-neutral-400">
@@ -484,7 +484,7 @@ ${JSON.stringify(meeting.summary)}
                 })}
               </span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight mt-1">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-[#16161E] dark:text-white tracking-tight mt-1">
               {meeting.title}
             </h1>
           </div>
@@ -494,7 +494,7 @@ ${JSON.stringify(meeting.summary)}
           <button
             id="meeting-copy-transcript-btn"
             onClick={handleCopyTranscript}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-100 dark:border-[#272B30] bg-white dark:bg-[#1A1D1F] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#1A1A1A] dark:text-white text-xs font-bold transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white text-xs font-bold transition-colors cursor-pointer"
           >
             {copiedTranscript ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
             <span>{copiedTranscript ? (language === 'it' ? 'Copiato' : 'Copied') : (language === 'it' ? 'Copia Testo' : 'Copy Text')}</span>
@@ -512,7 +512,7 @@ ${JSON.stringify(meeting.summary)}
       </div>
 
       {/* Audio Player Bar */}
-      <div className="bg-white dark:bg-[#1A1D1F] rounded-3xl p-4 sm:p-5 shadow-sm border border-gray-100 dark:border-[#272B30] flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-4 sm:p-5 border border-white/70 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
         {meeting.audioUrl && (
           <audio
             ref={audioElRef}
@@ -532,7 +532,7 @@ ${JSON.stringify(meeting.summary)}
           <button
             id="audio-player-toggle-btn"
             onClick={() => setIsPlaying(!isPlaying)}
-            className="w-11 h-11 rounded-full bg-[#761EAF] hover:bg-[#681898] text-white flex items-center justify-center shadow-md shadow-[#761EAF]/30 active:scale-95 transition-all cursor-pointer shrink-0"
+            className="w-11 h-11 rounded-full bg-[#6A49D8] hover:bg-[#5B3CC4] text-white flex items-center justify-center shadow-md shadow-[#6A49D8]/30 active:scale-95 transition-all cursor-pointer shrink-0"
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
           </button>
@@ -544,10 +544,10 @@ ${JSON.stringify(meeting.summary)}
             </div>
             <div
               onClick={handleTimelineClick}
-              className="w-full bg-[#F8F9FB] dark:bg-neutral-800 h-2.5 rounded-full overflow-hidden cursor-pointer relative"
+              className="w-full bg-[#F3F1FC]/70 dark:bg-neutral-800 h-2.5 rounded-full overflow-hidden cursor-pointer relative"
             >
               <div
-                className="bg-[#761EAF] h-full rounded-full transition-all duration-100"
+                className="bg-[#6A49D8] h-full rounded-full transition-all duration-100"
                 style={{ width: `${meeting.duration > 0 ? (currentTime / meeting.duration) * 100 : 0}%` }}
               />
             </div>
@@ -556,7 +556,7 @@ ${JSON.stringify(meeting.summary)}
 
         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
           {/* Speed Selector */}
-          <div className="flex items-center gap-1 bg-[#F8F9FB] dark:bg-[#272B30] p-1 rounded-xl text-xs font-bold text-[#1A1A1A] dark:text-white">
+          <div className="flex items-center gap-1 bg-[#F3F1FC]/70 dark:bg-white/10 p-1 rounded-xl text-xs font-bold text-[#16161E] dark:text-white">
             {[1, 1.25, 1.5, 2].map((spd) => (
               <button
                 key={spd}
@@ -568,7 +568,7 @@ ${JSON.stringify(meeting.summary)}
                 }}
                 className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
                   playbackSpeed === spd
-                    ? 'bg-white dark:bg-[#1A1D1F] text-[#761EAF] shadow-xs'
+                    ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#6A49D8] shadow-xs'
                     : 'text-gray-400 dark:text-neutral-400'
                 }`}
               >
@@ -585,13 +585,13 @@ ${JSON.stringify(meeting.summary)}
       </div>
 
       {/* Tabs Switcher: Riassunto vs Trascrizione vs Chat AI */}
-      <div className="flex bg-[#761EAF]/5 dark:bg-[#761EAF]/10 p-1.5 rounded-2xl border border-transparent">
+      <div className="flex bg-[#6A49D8]/5 dark:bg-[#6A49D8]/10 p-1.5 rounded-2xl border border-transparent">
         <button
           id="meeting-tab-summary"
           onClick={() => setActiveTab('summary')}
           className={`flex-1 py-2 text-xs sm:text-sm font-extrabold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
             activeTab === 'summary'
-              ? 'bg-white dark:bg-[#1A1D1F] text-[#761EAF] dark:text-white shadow-xs'
+              ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#6A49D8] dark:text-white shadow-xs'
               : 'text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-400'
           }`}
         >
@@ -604,11 +604,11 @@ ${JSON.stringify(meeting.summary)}
           onClick={() => setActiveTab('transcript')}
           className={`flex-1 py-2 text-xs sm:text-sm font-extrabold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
             activeTab === 'transcript'
-              ? 'bg-white dark:bg-[#1A1D1F] text-[#761EAF] dark:text-white shadow-xs'
+              ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#6A49D8] dark:text-white shadow-xs'
               : 'text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-400'
           }`}
         >
-          <FileText className="w-4 h-4 text-[#761EAF]" />
+          <FileText className="w-4 h-4 text-[#6A49D8]" />
           <span>{t('transcript')}</span>
         </button>
 
@@ -617,11 +617,11 @@ ${JSON.stringify(meeting.summary)}
           onClick={() => setActiveTab('chat')}
           className={`flex-1 py-2 text-xs sm:text-sm font-extrabold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
             activeTab === 'chat'
-              ? 'bg-white dark:bg-[#1A1D1F] text-[#761EAF] dark:text-white shadow-xs'
+              ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#6A49D8] dark:text-white shadow-xs'
               : 'text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-400'
           }`}
         >
-          <Bot className="w-4 h-4 text-[#761EAF]" />
+          <Bot className="w-4 h-4 text-[#6A49D8]" />
           <span>{language === 'it' ? 'Chat AI' : 'AI Chat'}</span>
         </button>
       </div>
@@ -630,12 +630,12 @@ ${JSON.stringify(meeting.summary)}
       {activeTab === 'summary' && (
         <div className="space-y-6 animate-in fade-in duration-200">
           {isProcessingLazy ? (
-            <div className="bg-white dark:bg-[#1A1D1F] rounded-2xl p-8 shadow-xs border border-gray-100 dark:border-[#272B30] text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-[#761EAF]/10 dark:bg-[#761EAF]/20 flex items-center justify-center mx-auto">
-                <RefreshCw className="w-5 h-5 text-[#761EAF] animate-spin" />
+            <div className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] rounded-2xl p-8 shadow-xs border border-white/70 dark:border-white/10 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-[#6A49D8]/10 dark:bg-[#6A49D8]/20 flex items-center justify-center mx-auto">
+                <RefreshCw className="w-5 h-5 text-[#6A49D8] animate-spin" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-xs font-black text-[#1A1A1A] dark:text-white">
+                <h3 className="text-xs font-black text-[#16161E] dark:text-white">
                   {language === 'it' ? 'Generazione analisi IA in corso...' : 'Generating AI Analysis...'}
                 </h3>
                 <p className="text-[11px] text-gray-400 dark:text-neutral-400 max-w-xs mx-auto leading-relaxed">
@@ -646,12 +646,12 @@ ${JSON.stringify(meeting.summary)}
               </div>
             </div>
           ) : lazyError ? (
-            <div className="bg-white dark:bg-[#1A1D1F] rounded-2xl p-8 shadow-xs border border-gray-100 dark:border-[#272B30] text-center space-y-3">
+            <div className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] rounded-2xl p-8 shadow-xs border border-white/70 dark:border-white/10 text-center space-y-3">
               <div className="text-amber-500 flex justify-center">
                 <AlertCircle className="w-8 h-8" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-xs font-black text-[#1A1A1A] dark:text-white">
+                <h3 className="text-xs font-black text-[#16161E] dark:text-white">
                   {language === 'it' ? "Impossibile completare l'analisi IA" : "Unable to complete AI analysis"}
                 </h3>
                 <p className="text-[11px] text-rose-500 max-w-xs mx-auto leading-relaxed">
@@ -660,7 +660,7 @@ ${JSON.stringify(meeting.summary)}
               </div>
               <button
                 onClick={triggerLazyAi}
-                className="px-3.5 py-1.5 bg-[#761EAF] hover:bg-[#681898] text-white text-[10px] font-bold rounded-lg cursor-pointer"
+                className="px-3.5 py-1.5 bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-[10px] font-bold rounded-lg cursor-pointer"
               >
                 {language === 'it' ? 'Riprova Elaborazione' : 'Retry Processing'}
               </button>
@@ -668,9 +668,9 @@ ${JSON.stringify(meeting.summary)}
           ) : (
             <>
               {/* Executive Overview */}
-          <div className="bg-white dark:bg-[#1A1D1F] rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-[#272B30]">
+          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-6 border border-white/70 dark:border-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold text-[#1A1A1A] dark:text-white flex items-center gap-2">
+              <h2 className="text-base font-bold text-[#16161E] dark:text-white flex items-center gap-2">
                 <AILogo size="sm" />
                 <span>{language === 'it' ? 'Panoramica Esecutiva' : 'Executive Overview'}</span>
               </h2>
@@ -685,11 +685,11 @@ ${JSON.stringify(meeting.summary)}
             </p>
 
             {meeting.summary?.topics && (
-              <div className="mt-4 pt-3 border-t border-gray-100 dark:border-[#272B30] flex flex-wrap gap-2">
+              <div className="mt-4 pt-3 border-t border-[#ECEBF3] dark:border-white/10 flex flex-wrap gap-2">
                 {meeting.summary.topics.map((topic, i) => (
                   <span
                     key={i}
-                    className="text-xs font-medium px-2.5 py-1 rounded-lg bg-[#F8F9FB] dark:bg-neutral-800 text-gray-500 dark:text-neutral-400"
+                    className="text-xs font-medium px-2.5 py-1 rounded-lg bg-[#F3F1FC]/70 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400"
                   >
                     #{topic}
                   </span>
@@ -699,15 +699,15 @@ ${JSON.stringify(meeting.summary)}
           </div>
 
           {/* CALENDARIO AI: Impegni & Date Rilevate (Pro Feature) */}
-          <div className="bg-white dark:bg-[#1A1D1F] rounded-3xl p-6 shadow-sm border border-[#761EAF]/20 relative overflow-hidden">
+          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-6 border border-[#6A49D8]/20 relative overflow-hidden shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-[#1A1A1A] dark:text-white flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-[#761EAF]" />
+                  <h2 className="text-base font-bold text-[#16161E] dark:text-white flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-[#6A49D8]" />
                     <span>{language === 'it' ? 'Calendario AI' : 'AI Calendar'}</span>
                   </h2>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#761EAF] text-white">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#6A49D8] text-white">
                     {language === 'it' ? 'ESCLUSIVA PRO' : 'PRO EXCLUSIVE'}
                   </span>
                 </div>
@@ -719,7 +719,7 @@ ${JSON.stringify(meeting.summary)}
               {user?.plan !== 'pro' && (
                 <button
                   onClick={() => setIsUpgradeModalOpen(true)}
-                  className="text-xs text-[#761EAF] font-bold hover:underline cursor-pointer"
+                  className="text-xs text-[#6A49D8] font-bold hover:underline cursor-pointer"
                 >
                   {language === 'it' ? 'Sblocca con Recall Pro →' : 'Unlock with Recall Pro →'}
                 </button>
@@ -731,14 +731,14 @@ ${JSON.stringify(meeting.summary)}
                 {meeting.calendarEventsDetected.map((ev) => (
                   <div
                     key={ev.id}
-                    className="p-4 rounded-2xl border border-gray-100 dark:border-[#272B30] bg-[#F8F9FB] dark:bg-[#111315] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    className="p-4 rounded-2xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-[#1A1A1A] dark:text-white">
+                        <span className="text-xs font-bold text-[#16161E] dark:text-white">
                           {ev.title}
                         </span>
-                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#761EAF]/10 text-[#761EAF] dark:bg-[#761EAF]/20 dark:text-[#C084FC]">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#6A49D8]/10 text-[#6A49D8] dark:bg-[#6A49D8]/20 dark:text-[#B29FFF]">
                           {ev.date} {language === 'it' ? 'alle' : 'at'} {ev.startTime}
                         </span>
                       </div>
@@ -754,7 +754,7 @@ ${JSON.stringify(meeting.summary)}
                       className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer ${
                         ev.isAddedToCalendar
                           ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                          : 'bg-[#761EAF] hover:bg-[#681898] text-white shadow-xs'
+                          : 'bg-[#6A49D8] hover:bg-[#5B3CC4] text-white shadow-xs'
                       }`}
                     >
                       {ev.isAddedToCalendar ? (
@@ -780,12 +780,12 @@ ${JSON.stringify(meeting.summary)}
           </div>
 
           {/* Mappa Concettuale AI */}
-          <div className="bg-white dark:bg-[#1A1D1F] rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-[#272B30] flex flex-col gap-4 relative overflow-hidden">
+          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-6 border border-white/70 dark:border-white/10 flex flex-col gap-4 relative overflow-hidden shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
             <div className="absolute top-0 right-0 p-1 bg-gradient-to-l from-purple-500/10 to-transparent w-40 h-40 rounded-full blur-2xl pointer-events-none" />
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-extrabold text-[#1A1A1A] dark:text-white flex items-center gap-2">
-                  <Network className="w-5 h-5 text-[#761EAF]" />
+                <h2 className="text-base font-extrabold text-[#16161E] dark:text-white flex items-center gap-2">
+                  <Network className="w-5 h-5 text-[#6A49D8]" />
                   <span>{language === 'it' ? 'Mappa Concettuale AI' : 'AI Concept Map'}</span>
                 </h2>
                 <p className="text-xs text-gray-400 dark:text-neutral-400 font-medium">
@@ -796,7 +796,7 @@ ${JSON.stringify(meeting.summary)}
               {!conceptMap ? (
                 <button
                   onClick={() => setShowMapQuestions(true)}
-                  className="self-start sm:self-auto inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#761EAF] hover:bg-[#641896] text-white text-xs font-bold rounded-xl shadow-md shadow-[#761EAF]/20 transition-all cursor-pointer shrink-0"
+                  className="self-start sm:self-auto inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-bold rounded-xl shadow-md shadow-[#6A49D8]/20 transition-all cursor-pointer shrink-0"
                 >
                   <Brain className="w-3.5 h-3.5" />
                   <span>{language === 'it' ? 'Genera Mappa con IA' : 'Generate Map with AI'}</span>
@@ -805,14 +805,14 @@ ${JSON.stringify(meeting.summary)}
                 <div className="flex items-center gap-2 animate-in fade-in">
                   <button
                     onClick={() => setShowMindMapScreen(true)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#761EAF]/10 hover:bg-[#761EAF]/20 dark:bg-[#761EAF]/20 dark:hover:bg-[#761EAF]/30 text-[#761EAF] dark:text-[#C084FC] text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#6A49D8]/10 hover:bg-[#6A49D8]/20 dark:bg-[#6A49D8]/20 dark:hover:bg-[#6A49D8]/30 text-[#6A49D8] dark:text-[#B29FFF] text-xs font-bold rounded-xl transition-all cursor-pointer"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     <span>{language === 'it' ? 'Visualizza Mappa' : 'View Map'}</span>
                   </button>
                   <button
                     onClick={() => setShowMapQuestions(true)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 dark:border-[#272B30] hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-white/70 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>{language === 'it' ? 'Rigenera...' : 'Regenerate...'}</span>
@@ -822,7 +822,7 @@ ${JSON.stringify(meeting.summary)}
             </div>
 
             {/* Simple static preview/status banner */}
-            <div className="bg-[#F8F9FB] dark:bg-[#111315]/80 p-5 rounded-2xl border border-gray-100 dark:border-[#272B30] text-center">
+            <div className="bg-[#F3F1FC]/70 dark:bg-black/25 p-5 rounded-2xl border border-[#E6E3F3] dark:border-white/10 text-center">
               {conceptMap ? (
                 <div className="space-y-2">
                   <p className="text-xs text-gray-600 dark:text-neutral-300 font-bold">
@@ -843,7 +843,7 @@ ${JSON.stringify(meeting.summary)}
                   </p>
                   <button
                     onClick={() => setShowMapQuestions(true)}
-                    className="text-xs text-[#761EAF] dark:text-[#C084FC] font-extrabold hover:underline"
+                    className="text-xs text-[#6A49D8] dark:text-[#B29FFF] font-extrabold hover:underline"
                   >
                     {language === 'it' ? 'Inizia configurazione guidata →' : 'Start guided configuration →'}
                   </button>
@@ -853,9 +853,9 @@ ${JSON.stringify(meeting.summary)}
           </div>
 
           {/* Action Items & Task */}
-          <div className="bg-white dark:bg-[#1A1D1F] rounded-3xl p-6 shadow-xs border border-gray-100 dark:border-[#272B30] space-y-4">
+          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-6 border border-white/70 dark:border-white/10 space-y-4 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
             <div className="flex items-center justify-between pl-1">
-              <h2 className="text-base font-black text-[#1A1A1A] dark:text-white">
+              <h2 className="text-base font-black text-[#16161E] dark:text-white">
                 Action Items
               </h2>
               <div className="text-[10px] font-black uppercase text-gray-400 dark:text-neutral-500 tracking-wider flex items-center gap-1">
@@ -888,11 +888,11 @@ ${JSON.stringify(meeting.summary)}
                     className={`p-3.5 rounded-[22px] border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 ${
                       act.isCompleted
                         ? 'bg-gray-50/50 dark:bg-neutral-900/10 border-transparent opacity-60'
-                        : 'bg-white dark:bg-[#1A1D1F] border-gray-100 dark:border-[#272B30] shadow-3xs'
+                        : 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] border-[#ECEBF3] dark:border-white/10 shadow-3xs'
                     }`}
                   >
                     <div>
-                      <p className="text-xs sm:text-sm font-bold text-[#1A1A1A] dark:text-white leading-normal">
+                      <p className="text-xs sm:text-sm font-bold text-[#16161E] dark:text-white leading-normal">
                         {act.task}
                       </p>
                       <div className="flex items-center gap-1.5 mt-1 text-[10px] text-gray-400 dark:text-neutral-500 font-bold">
@@ -915,7 +915,7 @@ ${JSON.stringify(meeting.summary)}
                       ) : (
                         <button
                           onClick={handleActionSyncClick}
-                          className="px-3.5 py-1.5 bg-[#761EAF] hover:bg-[#681898] text-white text-[10.5px] font-black rounded-full shadow-3xs hover:scale-[1.03] active:scale-97 transition-all flex items-center gap-1 cursor-pointer"
+                          className="px-3.5 py-1.5 bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-[10.5px] font-black rounded-full shadow-3xs hover:scale-[1.03] active:scale-97 transition-all flex items-center gap-1 cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>{language === 'it' ? 'Aggiungi a Google Calendar' : 'Add to Google Calendar'}</span>
@@ -943,7 +943,7 @@ ${JSON.stringify(meeting.summary)}
               value={transcriptSearch}
               onChange={(e) => setTranscriptSearch(e.target.value)}
               placeholder={language === 'it' ? 'Cerca parole chiave o interlocutori nella trascrizione...' : 'Search keywords or speakers in transcript...'}
-              className="w-full pl-10 pr-3 py-3 text-xs rounded-2xl border border-gray-100 dark:border-[#272B30] bg-white dark:bg-[#1A1D1F] text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#761EAF]"
+              className="w-full pl-10 pr-3 py-3 text-xs rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#16161E] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#6A49D8]"
             />
           </div>
 
@@ -952,7 +952,7 @@ ${JSON.stringify(meeting.summary)}
             {filteredTranscript.map((seg) => {
               const speaker = meeting.speakers.find((s) => s.id === seg.speakerId) || {
                 name: seg.speakerName,
-                color: '#761EAF',
+                color: '#6A49D8',
               };
 
               const formatOffset = (offsetSec: number) => {
@@ -964,17 +964,17 @@ ${JSON.stringify(meeting.summary)}
               return (
                 <div
                   key={seg.id}
-                  className="bg-white dark:bg-[#1A1D1F] rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-100 dark:border-[#272B30]"
+                  className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] rounded-2xl p-4 sm:p-5 shadow-sm border border-white/70 dark:border-white/10"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div
                         className="w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center uppercase"
-                        style={{ backgroundColor: speaker.color || '#761EAF' }}
+                        style={{ backgroundColor: speaker.color || '#6A49D8' }}
                       >
                         {seg.speakerName.charAt(0)}
                       </div>
-                      <span className="text-xs font-bold text-[#1A1A1A] dark:text-white">
+                      <span className="text-xs font-bold text-[#16161E] dark:text-white">
                         {seg.speakerName}
                       </span>
                     </div>
@@ -996,15 +996,15 @@ ${JSON.stringify(meeting.summary)}
 
       {/* TAB CONTENT 3: CHATTA CON L'IA */}
       {activeTab === 'chat' && (
-        <div className="bg-white dark:bg-[#1A1D1F] rounded-3xl shadow-sm border border-gray-100 dark:border-[#272B30] flex flex-col h-[520px] animate-in fade-in duration-200 overflow-hidden">
+        <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 flex flex-col h-[520px] animate-in fade-in duration-200 overflow-hidden shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
           {/* Chat Header */}
-          <div className="p-4 border-b border-gray-100 dark:border-[#272B30] flex items-center justify-between">
+          <div className="p-4 border-b border-[#ECEBF3] dark:border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-[#761EAF]/10 text-[#761EAF] flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl bg-[#6A49D8]/10 text-[#6A49D8] flex items-center justify-center">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-[#1A1A1A] dark:text-white">
+                <h3 className="text-xs font-bold text-[#16161E] dark:text-white">
                   {language === 'it' ? 'Assistente IA di Riunione' : 'Meeting AI Assistant'}
                 </h3>
                 <p className="text-[10px] text-gray-400 dark:text-neutral-400">
@@ -1022,11 +1022,11 @@ ${JSON.stringify(meeting.summary)}
           <div className={`flex-1 p-4 overflow-y-auto space-y-3 ${isProcessingLazy || lazyError ? 'flex flex-col justify-center' : ''}`}>
             {isProcessingLazy ? (
               <div className="text-center space-y-3 py-8">
-                <div className="w-10 h-10 rounded-full bg-[#761EAF]/10 dark:bg-[#761EAF]/20 flex items-center justify-center mx-auto animate-spin">
-                  <RefreshCw className="w-5 h-5 text-[#761EAF]" />
+                <div className="w-10 h-10 rounded-full bg-[#6A49D8]/10 dark:bg-[#6A49D8]/20 flex items-center justify-center mx-auto animate-spin">
+                  <RefreshCw className="w-5 h-5 text-[#6A49D8]" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs font-black text-[#1A1A1A] dark:text-white">
+                  <p className="text-xs font-black text-[#16161E] dark:text-white">
                     {language === 'it' ? 'Attivazione chat intelligente...' : 'Activating smart chat...'}
                   </p>
                   <p className="text-[10px] text-gray-400 dark:text-neutral-400 max-w-xs mx-auto leading-relaxed">
@@ -1052,7 +1052,7 @@ ${JSON.stringify(meeting.summary)}
                 <button
                   type="button"
                   onClick={triggerLazyAi}
-                  className="px-3 py-1 bg-[#761EAF] text-white text-[10px] font-bold rounded-lg cursor-pointer mx-auto"
+                  className="px-3 py-1 bg-[#6A49D8] text-white text-[10px] font-bold rounded-lg cursor-pointer mx-auto"
                 >
                   {language === 'it' ? 'Riprova' : 'Retry'}
                 </button>
@@ -1072,8 +1072,8 @@ ${JSON.stringify(meeting.summary)}
                     <div
                       className={`max-w-[80%] rounded-2xl p-3.5 text-xs sm:text-sm leading-relaxed ${
                         msg.sender === 'user'
-                          ? 'bg-[#761EAF] text-white rounded-br-none shadow-xs'
-                          : 'bg-[#F8F9FB] dark:bg-[#272B30] text-[#1A1A1A] dark:text-white rounded-bl-none'
+                          ? 'bg-[#6A49D8] text-white rounded-br-none shadow-xs'
+                          : 'bg-[#F3F1FC]/70 dark:bg-white/10 text-[#16161E] dark:text-white rounded-bl-none'
                       }`}
                     >
                       <p className="whitespace-pre-wrap font-normal">{msg.text}</p>
@@ -1093,10 +1093,10 @@ ${JSON.stringify(meeting.summary)}
                     <div className="w-7 h-7 rounded-full bg-transparent flex items-center justify-center">
                       <AILogo size="sm" isThinking={true} />
                     </div>
-                    <div className="bg-[#F8F9FB] dark:bg-[#272B30] p-3 rounded-2xl rounded-bl-none flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#761EAF] animate-bounce" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#761EAF] animate-bounce delay-150" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#761EAF] animate-bounce delay-300" />
+                    <div className="bg-[#F3F1FC]/70 dark:bg-white/10 p-3 rounded-2xl rounded-bl-none flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#6A49D8] animate-bounce" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#6A49D8] animate-bounce delay-150" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#6A49D8] animate-bounce delay-300" />
                     </div>
                   </div>
                 )}
@@ -1105,22 +1105,22 @@ ${JSON.stringify(meeting.summary)}
           </div>
 
           {/* Preset Prompts Pill Carousel */}
-          <div className="px-4 py-2.5 bg-[#F8F9FB] dark:bg-[#111315] border-t border-gray-100 dark:border-[#272B30] flex gap-2 overflow-x-auto no-scrollbar">
+          <div className="px-4 py-2.5 bg-[#F3F1FC]/70 dark:bg-black/25 border-t border-[#ECEBF3] dark:border-white/10 flex gap-2 overflow-x-auto no-scrollbar">
             <button
               onClick={() => handleSendChatMessage(language === 'it' ? 'Scrivi una mail di recap per i partecipanti' : 'Write a recap email for the participants')}
-              className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white dark:bg-[#1A1D1F] border border-gray-100 dark:border-[#272B30] hover:border-[#761EAF] text-[#1A1A1A] dark:text-white shrink-0 transition-colors cursor-pointer"
+              className="text-[11px] font-bold px-3 py-1.5 rounded-2xl bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] border border-white/70 dark:border-white/10 hover:border-[#6A49D8] text-[#16161E] dark:text-white shrink-0 transition-colors cursor-pointer"
             >
               {language === 'it' ? 'Mail di recap' : 'Recap Email'}
             </button>
             <button
               onClick={() => handleSendChatMessage(language === 'it' ? 'Quali scadenze sono state fissate?' : 'What deadlines have been set?')}
-              className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white dark:bg-[#1A1D1F] border border-gray-100 dark:border-[#272B30] hover:border-[#761EAF] text-[#1A1A1A] dark:text-white shrink-0 transition-colors cursor-pointer"
+              className="text-[11px] font-bold px-3 py-1.5 rounded-2xl bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] border border-white/70 dark:border-white/10 hover:border-[#6A49D8] text-[#16161E] dark:text-white shrink-0 transition-colors cursor-pointer"
             >
               {language === 'it' ? 'Scadenze fissate' : 'Set Deadlines'}
             </button>
             <button
               onClick={() => handleSendChatMessage(language === 'it' ? 'Chi è responsabile del rilascio in staging?' : 'Who is responsible for the staging release?')}
-              className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white dark:bg-[#1A1D1F] border border-gray-100 dark:border-[#272B30] hover:border-[#761EAF] text-[#1A1A1A] dark:text-white shrink-0 transition-colors cursor-pointer"
+              className="text-[11px] font-bold px-3 py-1.5 rounded-2xl bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] border border-white/70 dark:border-white/10 hover:border-[#6A49D8] text-[#16161E] dark:text-white shrink-0 transition-colors cursor-pointer"
             >
               {language === 'it' ? 'Responsabile staging' : 'Staging Owner'}
             </button>
@@ -1132,19 +1132,19 @@ ${JSON.stringify(meeting.summary)}
               e.preventDefault();
               handleSendChatMessage();
             }}
-            className="p-3 bg-white dark:bg-[#1A1D1F] border-t border-gray-100 dark:border-[#272B30] flex gap-2"
+            className="p-3 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] border-t border-[#ECEBF3] dark:border-white/10 flex gap-2"
           >
             <input
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               placeholder={language === 'it' ? 'Chiedi qualsiasi dettaglio su questa riunione...' : 'Ask any detail about this meeting...'}
-              className="flex-1 px-4 py-2.5 text-xs sm:text-sm rounded-xl border border-gray-200 dark:border-[#272B30] bg-[#F8F9FB] dark:bg-[#111315] text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#761EAF]"
+              className="flex-1 px-4 py-2.5 text-xs sm:text-sm rounded-xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#6A49D8]"
             />
             <button
               type="submit"
               disabled={isChatLoading || !chatInput.trim()}
-              className="px-4 py-2.5 bg-[#761EAF] hover:bg-[#681898] disabled:opacity-50 text-white rounded-xl transition-all flex items-center justify-center cursor-pointer"
+              className="px-4 py-2.5 bg-[#6A49D8] hover:bg-[#5B3CC4] disabled:opacity-50 text-white rounded-xl transition-all flex items-center justify-center cursor-pointer"
             >
               <Send className="w-4 h-4" />
             </button>
@@ -1156,14 +1156,14 @@ ${JSON.stringify(meeting.summary)}
       {/* 🔮 CUSTOM MAP CONFIGURATION FORM MODAL */}
       {showMapQuestions && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-[#1A1D1F] w-full max-w-lg rounded-3xl p-6 shadow-xl border border-gray-100 dark:border-[#272B30] space-y-6 text-left max-h-[90vh] overflow-y-auto">
-             <div className="flex items-center justify-between border-b border-gray-100 dark:border-[#272B30] pb-4">
+          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] w-full max-w-lg rounded-[28px] p-6 border border-white/70 dark:border-white/10 space-y-6 text-left max-h-[90vh] overflow-y-auto shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
+             <div className="flex items-center justify-between border-b border-[#ECEBF3] dark:border-white/10 pb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-[#761EAF] dark:text-[#C084FC] flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-[#6A49D8] dark:text-[#B29FFF] flex items-center justify-center">
                   <Brain className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-[#1A1A1A] dark:text-white">
+                  <h3 className="text-base font-extrabold text-[#16161E] dark:text-white">
                     {language === 'it' ? 'Personalizza la tua Mappa Concettuale' : 'Customize Your Concept Map'}
                   </h3>
                   <p className="text-xs text-gray-400 dark:text-neutral-400 font-medium">
@@ -1198,8 +1198,8 @@ ${JSON.stringify(meeting.summary)}
                       onClick={() => setMapFocus(opt.id as any)}
                       className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                         mapFocus === opt.id
-                          ? 'border-[#761EAF] bg-purple-50/50 dark:bg-[#761EAF]/10 text-[#761EAF] dark:text-[#C084FC] font-bold'
-                          : 'border-gray-100 dark:border-[#272B30] hover:bg-gray-50 dark:hover:bg-neutral-800'
+                          ? 'border-[#6A49D8] bg-purple-50/50 dark:bg-[#6A49D8]/10 text-[#6A49D8] dark:text-[#B29FFF] font-bold'
+                          : 'border-[#ECEBF3] dark:border-white/10 hover:bg-gray-50 dark:hover:bg-neutral-800'
                       }`}
                     >
                       <span className="block text-xs font-extrabold">{opt.title}</span>
@@ -1225,8 +1225,8 @@ ${JSON.stringify(meeting.summary)}
                       onClick={() => setMapDetail(opt.id as any)}
                       className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                         mapDetail === opt.id
-                          ? 'border-[#761EAF] bg-purple-50/50 dark:bg-[#761EAF]/10 text-[#761EAF] dark:text-[#C084FC] font-bold'
-                          : 'border-gray-100 dark:border-[#272B30] hover:bg-gray-50 dark:hover:bg-neutral-800'
+                          ? 'border-[#6A49D8] bg-purple-50/50 dark:bg-[#6A49D8]/10 text-[#6A49D8] dark:text-[#B29FFF] font-bold'
+                          : 'border-[#ECEBF3] dark:border-white/10 hover:bg-gray-50 dark:hover:bg-neutral-800'
                       }`}
                     >
                       <span className="block text-xs font-extrabold">{opt.title}</span>
@@ -1243,7 +1243,7 @@ ${JSON.stringify(meeting.summary)}
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'creative', title: 'Recall Purple', color: 'bg-[#761EAF]' },
+                    { id: 'creative', title: 'Recall Purple', color: 'bg-[#6A49D8]' },
                     { id: 'tech', title: 'Cobalt Blue', color: 'bg-blue-500' },
                     { id: 'minimal', title: 'Slate Minimal', color: 'bg-slate-600' },
                   ].map((opt) => (
@@ -1253,8 +1253,8 @@ ${JSON.stringify(meeting.summary)}
                       onClick={() => setMapStyle(opt.id as any)}
                       className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
                         mapStyle === opt.id
-                          ? 'border-[#761EAF] bg-purple-50/50 dark:bg-[#761EAF]/10 text-[#761EAF] dark:text-[#C084FC] font-bold'
-                          : 'border-gray-100 dark:border-[#272B30] hover:bg-gray-50 dark:hover:bg-neutral-800'
+                          ? 'border-[#6A49D8] bg-purple-50/50 dark:bg-[#6A49D8]/10 text-[#6A49D8] dark:text-[#B29FFF] font-bold'
+                          : 'border-[#ECEBF3] dark:border-white/10 hover:bg-gray-50 dark:hover:bg-neutral-800'
                       }`}
                     >
                       <div className={`w-3 h-3 rounded-full ${opt.color}`} />
@@ -1273,7 +1273,7 @@ ${JSON.stringify(meeting.summary)}
                   value={mapNotes}
                   onChange={(e) => setMapNotes(e.target.value)}
                   placeholder={language === 'it' ? 'Es: focalizzati principalmente sulle scadenze discusse, oppure mantieni uno schema a stella...' : 'E.g., focus mainly on discussed deadlines, or maintain a star schema...'}
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-100 dark:border-[#272B30] bg-transparent text-xs text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#761EAF] h-20 resize-none"
+                  className="w-full px-3 py-2.5 rounded-xl border border-white/70 dark:border-white/10 bg-transparent text-xs text-[#16161E] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6A49D8] h-20 resize-none"
                 />
               </div>
             </div>
@@ -1282,7 +1282,7 @@ ${JSON.stringify(meeting.summary)}
               <button
                 type="button"
                 onClick={() => setShowMapQuestions(false)}
-                className="flex-1 py-3 rounded-2xl border border-gray-200 dark:border-[#272B30] text-xs font-bold text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                className="flex-1 py-3 rounded-2xl border border-white/70 dark:border-white/10 text-xs font-bold text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-neutral-800 transition-all cursor-pointer"
               >
                 {language === 'it' ? 'Annulla' : 'Cancel'}
               </button>
@@ -1290,7 +1290,7 @@ ${JSON.stringify(meeting.summary)}
                 type="button"
                 onClick={generateCustomMapWithAi}
                 disabled={isGeneratingMap}
-                className="flex-1 py-3 rounded-2xl bg-[#761EAF] hover:bg-[#641896] text-white text-xs font-bold shadow-md shadow-[#761EAF]/20 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                className="flex-1 py-3 rounded-2xl bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-bold shadow-md shadow-[#6A49D8]/20 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 {isGeneratingMap ? (
                   <>
@@ -1311,25 +1311,25 @@ ${JSON.stringify(meeting.summary)}
 
       {/* 🗺️ FULLSCREEN MIND MAP SCREEN OVERLAY */}
       {showMindMapScreen && conceptMap && (
-        <div className="fixed inset-0 z-50 bg-[#F4F5F6] dark:bg-[#0B0D0E] overflow-y-auto animate-in slide-in-from-bottom duration-300">
+        <div className="fixed inset-0 z-50 bg-[#F5F3FD]/90 dark:bg-[#0F0D18]/90 backdrop-blur-xl overflow-y-auto animate-in slide-in-from-bottom duration-300">
           <div className="max-w-6xl mx-auto px-4 py-6 sm:py-10 space-y-6">
             
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-[#272B30] pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#ECEBF3] dark:border-white/10 pb-6">
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowMindMapScreen(false)}
-                  className="p-3 bg-white dark:bg-[#1A1D1F] border border-gray-200 dark:border-[#272B30] rounded-2xl text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                  className="p-3 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] border border-white/70 dark:border-white/10 rounded-2xl text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-neutral-800 transition-all cursor-pointer"
                   title={language === 'it' ? 'Torna alla riunione' : 'Back to meeting'}
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <Network className="w-4 h-4 text-[#761EAF]" />
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#761EAF]">Recall MindMap Workbench</span>
+                    <Network className="w-4 h-4 text-[#6A49D8]" />
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6A49D8]">Recall MindMap Workbench</span>
                   </div>
-                  <h1 className="text-xl sm:text-2xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight mt-0.5">
+                  <h1 className="text-xl sm:text-2xl font-extrabold text-[#16161E] dark:text-white tracking-tight mt-0.5">
                     {language === 'it' ? `Mappa Concettuale: ${meeting.title}` : `Concept Map: ${meeting.title}`}
                   </h1>
                 </div>
@@ -1358,7 +1358,7 @@ ${JSON.stringify(meeting.summary)}
                     setShowMindMapScreen(false);
                     setShowMapQuestions(true);
                   }}
-                  className="px-4 py-3 rounded-2xl bg-white dark:bg-[#1A1D1F] border border-gray-200 dark:border-[#272B30] hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white text-xs font-bold transition-all cursor-pointer"
+                  className="px-4 py-3 rounded-2xl bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] border border-white/70 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white text-xs font-bold transition-all cursor-pointer"
                 >
                   {language === 'it' ? 'Rigenera Mappa' : 'Regenerate Map'}
                 </button>
@@ -1396,7 +1396,7 @@ ${JSON.stringify(meeting.summary)}
             )}
 
             {/* Interactive Concept Map Area */}
-            <div className="relative w-full h-[600px] bg-white dark:bg-[#111315] rounded-[32px] shadow-sm border border-gray-200 dark:border-[#272B30] overflow-hidden flex items-center justify-center p-6">
+            <div className="relative w-full h-[600px] bg-white/70 dark:bg-black/25 rounded-[32px] shadow-sm border border-white/70 dark:border-white/10 overflow-hidden flex items-center justify-center p-6">
               
               {/* Grid Background */}
               <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#272b30_1px,transparent_1px)] [background-size:24px_24px] opacity-60" />
@@ -1430,7 +1430,7 @@ ${JSON.stringify(meeting.summary)}
                         y1={`${p1.y}%`}
                         x2={`${p2.x}%`}
                         y2={`${p2.y}%`}
-                        stroke={fromNode.color || "#761EAF"}
+                        stroke={fromNode.color || "#6A49D8"}
                         strokeWidth="2"
                         strokeDasharray="4 6"
                         className="opacity-40 animate-pulse"
@@ -1477,7 +1477,7 @@ ${JSON.stringify(meeting.summary)}
                       <div
                         className={`p-4 rounded-[20px] text-center shadow-lg border max-w-[160px] transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center ${
                           node.type === 'central'
-                            ? 'bg-[#761EAF] border-transparent text-white ring-4 ring-[#761EAF]/25'
+                            ? 'bg-[#6A49D8] border-transparent text-white ring-4 ring-[#6A49D8]/25'
                             : node.type === 'topic'
                             ? 'bg-blue-600 dark:bg-blue-700 border-transparent text-white ring-2 ring-blue-500/15'
                             : 'bg-emerald-600 dark:bg-emerald-700 border-transparent text-white ring-2 ring-emerald-500/15'
@@ -1499,7 +1499,7 @@ ${JSON.stringify(meeting.summary)}
             <div className="text-center">
               <button
                 onClick={() => setShowMindMapScreen(false)}
-                className="px-6 py-3 border border-gray-200 dark:border-[#272B30] rounded-2xl hover:bg-gray-100 dark:hover:bg-neutral-800 text-xs font-bold text-gray-700 dark:text-white transition-all cursor-pointer"
+                className="px-6 py-3 border border-white/70 dark:border-white/10 rounded-2xl hover:bg-[#F1EFF9] dark:hover:bg-neutral-800 text-xs font-bold text-gray-700 dark:text-white transition-all cursor-pointer"
               >
                 {language === 'it' ? 'Torna ai dettagli riunione' : 'Back to meeting details'}
               </button>

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { AILogo } from './AILogo';
 import { AudioRecorderService } from '../services/audioRecorder';
+import { transcribeBlobLocally, preloadWhisper, releaseWhisper } from '../services/whisperService';
 import {
   processMeetingFastApi,
   transcribeAudioApi,
@@ -23,6 +24,19 @@ import {
 } from '../services/geminiService';
 import { Meeting } from '../types';
 import confetti from 'canvas-confetti';
+
+// Il server non conosce i tempi (Whisper locale restituisce solo testo): li stimiamo in proporzione alla lunghezza del testo
+function withApproxOffsets<T extends { text: string; timeOffset: number }>(segments: T[], totalSec: number): T[] {
+  if (!segments || segments.length < 2 || !(totalSec > 0)) return segments;
+  if (segments.some((s) => s.timeOffset > 0)) return segments;
+  const totalChars = segments.reduce((n, s) => n + (s.text?.length || 0), 0) || 1;
+  let acc = 0;
+  return segments.map((s) => {
+    const off = Math.round((acc / totalChars) * totalSec);
+    acc += s.text?.length || 0;
+    return { ...s, timeOffset: off };
+  });
+}
 
 export const RecordingModal: React.FC = () => {
   const {
@@ -41,6 +55,7 @@ export const RecordingModal: React.FC = () => {
   const [audioLevel, setAudioLevel] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [processingStage, setProcessingStage] = useState<string | null>(null);
+  const [processingPercent, setProcessingPercent] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [processedMeeting, setProcessedMeeting] = useState<Meeting | null>(null);
   const [tempTitle, setTempTitle] = useState('');
@@ -53,8 +68,14 @@ export const RecordingModal: React.FC = () => {
   const recorderRef = useRef<AudioRecorderService | null>(null);
   const timerRef = useRef<any>(null);
   const speechRecognitionRef = useRef<any>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const handleCancel = React.useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    releaseWhisper();
     if (recorderRef.current) {
       recorderRef.current.cancelRecording();
       recorderRef.current = null;
@@ -71,6 +92,7 @@ export const RecordingModal: React.FC = () => {
     setRecordingSeconds(0);
     setLiveTranscript('');
     setProcessingStage(null);
+    setProcessingPercent(null);
     setErrorMessage(null);
     setUploadedFile(null);
     setProcessedMeeting(null);
@@ -127,6 +149,47 @@ export const RecordingModal: React.FC = () => {
     }
   };
 
+  // Trascrive l'audio SUL TELEFONO con Whisper; ritorna solo testo (l'audio non viene mai inviato al server)
+  const runLocalTranscription = async (
+    blob: Blob,
+    fallbackText = ''
+  ): Promise<{ text: string; durationSec: number }> => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setProcessingPercent(0);
+    try {
+      const result = await transcribeBlobLocally(blob, {
+        signal: controller.signal,
+        onProgress: (p) => {
+          setProcessingPercent(p.percent);
+          setProcessingStage(
+            p.stage === 'decoding'
+              ? "Lettura dell'audio sul dispositivo..."
+              : p.stage === 'model'
+              ? 'Preparazione del trascrittore sul dispositivo (la prima volta scarica il modello)...'
+              : 'Trascrizione sul dispositivo in corso...'
+          );
+        },
+      });
+      const text = result.text.trim() || fallbackText.trim();
+      if (!text) {
+        throw new Error('Non ho rilevato parlato nella registrazione.');
+      }
+      return { text, durationSec: result.durationSec };
+    } catch (err: any) {
+      if (err?.name === 'AbortError') throw err;
+      // Se Whisper non è utilizzabile ma c'è l'anteprima in tempo reale, usiamo quella
+      if (fallbackText.trim()) {
+        console.warn('Trascrizione locale non riuscita, uso il testo in tempo reale:', err);
+        return { text: fallbackText.trim(), durationSec: 0 };
+      }
+      throw err;
+    } finally {
+      abortRef.current = null;
+      setProcessingPercent(null);
+    }
+  };
+
   const startLiveRecording = async () => {
     setErrorMessage(null);
     setLiveTranscript('');
@@ -141,6 +204,9 @@ export const RecordingModal: React.FC = () => {
 
       // Start live transcription preview
       initSpeechRecognition();
+
+      // Scalda il trascrittore locale mentre si registra (la prima volta scarica il modello)
+      preloadWhisper().catch(() => {});
     } catch (err: any) {
       console.error(err);
       setErrorMessage(
@@ -181,14 +247,17 @@ export const RecordingModal: React.FC = () => {
         } catch (e) {}
       }
 
-      const { base64, mimeType } = await recorderRef.current.stopRecording();
+      const { blob, base64 } = await recorderRef.current.stopRecording();
       setIsRecording(false);
 
-      // Call ultra-fast transcription only API
+      // 1) Trascrizione audio ON-DEVICE (Whisper): l'audio non lascia il telefono
+      const { text } = await runLocalTranscription(blob, liveTranscript);
+
+      // 2) Al server arriva solo il TESTO già trascritto
+      setProcessingPercent(null);
+      setProcessingStage('Strutturazione della trascrizione con IA...');
       const meetingResult = await transcribeAudioApi({
-        audioBase64: base64,
-        mimeType,
-        liveTranscript,
+        text,
         plan: user?.plan || 'pro',
         languageHint: 'it',
       });
@@ -204,8 +273,8 @@ export const RecordingModal: React.FC = () => {
         status: 'processing', // This triggers the lazy AI load on detail view
         speakers: meetingResult.speakers && meetingResult.speakers.length > 0
           ? meetingResult.speakers
-          : [{ id: 'spk_1', name: user?.name || 'Interlocutore 1', color: '#761EAF' }],
-        transcript: meetingResult.segments || [],
+          : [{ id: 'spk_1', name: user?.name || 'Interlocutore 1', color: '#6A49D8' }],
+        transcript: withApproxOffsets(meetingResult.segments || [], recordingSeconds),
         summary: undefined,
         calendarEventsDetected: [],
         chatHistory: [],
@@ -217,10 +286,12 @@ export const RecordingModal: React.FC = () => {
       setProcessingStage(null);
     } catch (err: any) {
       console.error('Processing error:', err);
+      if (err?.name === 'AbortError') return;
       setErrorMessage(
         err.message || 'Si è verificato un errore durante la trascrizione audio.'
       );
       setProcessingStage(null);
+      setProcessingPercent(null);
     }
   };
 
@@ -236,11 +307,15 @@ export const RecordingModal: React.FC = () => {
       reader.onloadend = async () => {
         try {
           const base64 = (reader.result as string) || '';
-          const mimeType = uploadedFile.type || 'audio/mp3';
 
+          // 1) Trascrizione ON-DEVICE del file (l'audio non lascia il telefono)
+          const { text, durationSec } = await runLocalTranscription(uploadedFile);
+
+          // 2) Al server arriva solo il testo
+          setProcessingPercent(null);
+          setProcessingStage('Strutturazione della trascrizione con IA...');
           const meetingResult = await transcribeAudioApi({
-            audioBase64: base64,
-            mimeType,
+            text,
             plan: user?.plan || 'pro',
             languageHint: 'it',
           });
@@ -249,14 +324,14 @@ export const RecordingModal: React.FC = () => {
             id: `meet_${Date.now()}`,
             title: meetingResult.title || uploadedFile.name.replace(/\.[^/.]+$/, ''),
             date: new Date().toISOString(),
-            duration: 300, // estimated
+            duration: durationSec > 0 ? Math.round(durationSec) : 300,
             tags: ['File Audio', 'Da Elaborare'],
             category: meetingResult.category || 'Riunione',
             status: 'processing', // This triggers the lazy AI load on detail view
             speakers: meetingResult.speakers || [
-              { id: 'spk_1', name: user?.name || 'Interlocutore 1', color: '#761EAF' },
+              { id: 'spk_1', name: user?.name || 'Interlocutore 1', color: '#6A49D8' },
             ],
-            transcript: meetingResult.segments || [],
+            transcript: withApproxOffsets(meetingResult.segments || [], durationSec),
             summary: undefined,
             calendarEventsDetected: [],
             chatHistory: [],
@@ -268,6 +343,7 @@ export const RecordingModal: React.FC = () => {
           setProcessingStage(null);
         } catch (innerErr: any) {
           console.error(innerErr);
+          if (innerErr?.name === 'AbortError') return;
           setErrorMessage(innerErr.message || 'Errore durante la trascrizione del file audio.');
           setProcessingStage(null);
         }
@@ -319,7 +395,7 @@ export const RecordingModal: React.FC = () => {
               handleCancel();
               setIsRecordingModalOpen(false);
             }}
-            className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-[#1A1A1A] dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+            className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-[#16161E] dark:hover:text-white hover:bg-[#F1EFF9] dark:hover:bg-neutral-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -328,28 +404,44 @@ export const RecordingModal: React.FC = () => {
         {/* Processing State */}
         {processingStage ? (
           <div className="py-12 space-y-5 animate-in fade-in duration-200">
-            <div className="w-20 h-20 rounded-full bg-[#761EAF]/10 dark:bg-[#761EAF]/20 flex items-center justify-center mx-auto shadow-inner">
+            <div className="w-20 h-20 rounded-full bg-[#6A49D8]/10 dark:bg-[#6A49D8]/20 flex items-center justify-center mx-auto shadow-inner">
               <AILogo size="xl" isThinking={true} />
             </div>
             <div>
-              <h3 className="text-lg font-extrabold text-[#1A1A1A] dark:text-white">
+              <h3 className="text-lg font-extrabold text-[#16161E] dark:text-white">
                 Elaborazione AI
               </h3>
               <p className="mt-2 text-xs text-gray-500 dark:text-neutral-400 max-w-xs mx-auto font-medium">
                 {processingStage}
               </p>
             </div>
-            {/* Smoothly scrolling indeterminate progress bar */}
-            <div className="w-48 mx-auto bg-gray-100 dark:bg-neutral-800 h-2 rounded-full overflow-hidden relative">
-              <div className="bg-[#761EAF] h-full rounded-full absolute top-0 left-0 animate-progress" />
-            </div>
+            {processingPercent !== null ? (
+              <>
+                {/* Barra di avanzamento reale (trascrizione sul dispositivo) */}
+                <div className="w-48 mx-auto bg-gray-100 dark:bg-neutral-800 h-2 rounded-full overflow-hidden relative">
+                  <div
+                    className="bg-[#6A49D8] h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.max(3, Math.min(100, processingPercent))}%` }}
+                  />
+                </div>
+                <p className="text-[11px] font-bold text-[#6A49D8]">{Math.round(processingPercent)}%</p>
+                <p className="text-[10px] text-gray-400 dark:text-neutral-500 font-medium">
+                  L'audio resta sul tuo telefono. Tieni l'app aperta.
+                </p>
+              </>
+            ) : (
+              /* Smoothly scrolling indeterminate progress bar */
+              <div className="w-48 mx-auto bg-gray-100 dark:bg-neutral-800 h-2 rounded-full overflow-hidden relative">
+                <div className="bg-[#6A49D8] h-full rounded-full absolute top-0 left-0 animate-progress" />
+              </div>
+            )}
           </div>
         ) : processedMeeting ? (
           /* Save Confirmation Preview State */
           <div className="py-2 space-y-4 animate-in fade-in duration-200 text-left">
             
             <div className="text-center">
-              <h3 className="text-sm font-black text-[#1A1A1A] dark:text-white">
+              <h3 className="text-sm font-black text-[#16161E] dark:text-white">
                 Registrazione completata!
               </h3>
               <p className="mt-0.5 text-[10.5px] text-gray-500 dark:text-neutral-400 font-medium">
@@ -366,7 +458,7 @@ export const RecordingModal: React.FC = () => {
                   type="text"
                   value={tempTitle}
                   onChange={(e) => setTempTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-[#272B30] bg-transparent text-xs font-bold text-[#1A1A1A] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#761EAF]"
+                  className="w-full px-3 py-2 rounded-xl border border-white/70 dark:border-white/10 bg-transparent text-xs font-bold text-[#16161E] dark:text-white focus:outline-none focus:ring-1 focus:ring-[#6A49D8]"
                   placeholder="Es. Riunione del lunedì"
                 />
               </div>
@@ -377,10 +469,10 @@ export const RecordingModal: React.FC = () => {
                   <span className="block text-[10px] font-extrabold text-gray-400 dark:text-neutral-500 uppercase tracking-wider">
                     Anteprima Trascrizione
                   </span>
-                  <div className="max-h-20 overflow-y-auto p-2 bg-[#F8F9FD] dark:bg-[#111315] border border-gray-100 dark:border-[#272B30] rounded-lg text-[10.5px] text-gray-600 dark:text-neutral-400 font-medium leading-relaxed">
+                  <div className="max-h-20 overflow-y-auto p-2 bg-[#F3F1FC]/70 dark:bg-black/25 border border-[#E6E3F3] dark:border-white/10 rounded-lg text-[10.5px] text-gray-600 dark:text-neutral-400 font-medium leading-relaxed">
                     {processedMeeting.transcript.slice(0, 3).map((seg) => (
                       <p key={seg.id} className="mb-1">
-                        <strong className="text-[#761EAF]">{seg.speakerName}:</strong> {seg.text}
+                        <strong className="text-[#6A49D8]">{seg.speakerName}:</strong> {seg.text}
                       </p>
                     ))}
                     {processedMeeting.transcript.length > 3 && (
@@ -390,7 +482,7 @@ export const RecordingModal: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2 bg-[#F8F9FD] dark:bg-[#111315] p-2.5 rounded-xl border border-gray-100 dark:border-[#272B30]">
+              <div className="grid grid-cols-2 gap-2 bg-[#F3F1FC]/70 dark:bg-black/25 p-2.5 rounded-xl border border-[#E6E3F3] dark:border-white/10">
                 <div>
                   <label htmlFor="modal-category-select" className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Categoria</label>
                   <select
@@ -402,18 +494,18 @@ export const RecordingModal: React.FC = () => {
                         category: e.target.value as any,
                       });
                     }}
-                    className="w-full bg-transparent text-[11px] font-black text-[#1A1A1A] dark:text-white border-none p-0 focus:outline-none focus:ring-0 cursor-pointer outline-none hover:text-[#761EAF] transition-colors"
+                    className="w-full bg-transparent text-[11px] font-black text-[#16161E] dark:text-white border-none p-0 focus:outline-none focus:ring-0 cursor-pointer outline-none hover:text-[#6A49D8] transition-colors"
                   >
-                    <option value="Riunione" className="bg-white dark:bg-[#1A1D1F] text-black dark:text-white">Riunione</option>
-                    <option value="Chiamata" className="bg-white dark:bg-[#1A1D1F] text-black dark:text-white">Chiamata</option>
-                    <option value="Lezione" className="bg-white dark:bg-[#1A1D1F] text-black dark:text-white">Lezione/Corso</option>
-                    <option value="Intervista" className="bg-white dark:bg-[#1A1D1F] text-black dark:text-white">Intervista</option>
-                    <option value="Nota Personale" className="bg-white dark:bg-[#1A1D1F] text-black dark:text-white">Nota Personale</option>
+                    <option value="Riunione" className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-black dark:text-white">Riunione</option>
+                    <option value="Chiamata" className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-black dark:text-white">Chiamata</option>
+                    <option value="Lezione" className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-black dark:text-white">Lezione/Corso</option>
+                    <option value="Intervista" className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-black dark:text-white">Intervista</option>
+                    <option value="Nota Personale" className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-black dark:text-white">Nota Personale</option>
                   </select>
                 </div>
                 <div>
                   <span className="block text-[9px] text-gray-400 font-bold uppercase tracking-wider">Durata</span>
-                  <span className="text-[11px] font-black text-[#1A1A1A] dark:text-white">
+                  <span className="text-[11px] font-black text-[#16161E] dark:text-white">
                     {Math.floor(processedMeeting.duration / 60)}m {processedMeeting.duration % 60}s
                   </span>
                 </div>
@@ -427,7 +519,7 @@ export const RecordingModal: React.FC = () => {
                   setProcessedMeeting(null);
                   setTempTitle('');
                 }}
-                className="flex-1 py-2 rounded-xl border border-gray-200 dark:border-[#272B30] hover:bg-gray-100 dark:hover:bg-neutral-800 text-[11px] font-bold text-[#1A1A1A] dark:text-white transition-all cursor-pointer"
+                className="flex-1 py-2 rounded-xl border border-white/70 dark:border-white/10 hover:bg-[#F1EFF9] dark:hover:bg-neutral-800 text-[11px] font-bold text-[#16161E] dark:text-white transition-all cursor-pointer"
               >
                 Annulla
               </button>
@@ -468,7 +560,7 @@ export const RecordingModal: React.FC = () => {
 
             {/* Timer */}
             <div 
-              className="text-[#1A1A1A] dark:text-white tracking-wider"
+              className="text-[#16161E] dark:text-white tracking-wider"
               style={{ fontFamily: 'Inter', fontWeight: 'bold', fontSize: '47px' }}
             >
               {formatTimer(recordingSeconds)}
@@ -483,7 +575,7 @@ export const RecordingModal: React.FC = () => {
                 return (
                   <div
                     key={i}
-                    className="w-1.5 rounded-full bg-[#761EAF] transition-all duration-75"
+                    className="w-1.5 rounded-full bg-[#6A49D8] transition-all duration-75"
                     style={{ height: `${height}px` }}
                   />
                 );
@@ -492,8 +584,8 @@ export const RecordingModal: React.FC = () => {
 
             {/* Live Captions Preview Box */}
             {liveTranscript && (
-              <div className="p-3.5 rounded-2xl bg-[#F8F9FD] dark:bg-[#111315] border border-gray-200 dark:border-[#272B30] text-left text-xs text-gray-700 dark:text-neutral-300 max-h-24 overflow-y-auto leading-relaxed">
-                <span className="font-bold text-[#761EAF] text-[10px] block uppercase tracking-wider mb-1">
+              <div className="p-3.5 rounded-2xl bg-[#F3F1FC]/70 dark:bg-black/25 border border-[#E6E3F3] dark:border-white/10 text-left text-xs text-gray-700 dark:text-neutral-300 max-h-24 overflow-y-auto leading-relaxed">
+                <span className="font-bold text-[#6A49D8] text-[10px] block uppercase tracking-wider mb-1">
                   Anteprima Parlato in Tempo Reale:
                 </span>
                 "{liveTranscript}"
@@ -506,7 +598,7 @@ export const RecordingModal: React.FC = () => {
                 id="recording-pause-btn"
                 type="button"
                 onClick={handlePauseToggle}
-                className="p-3.5 rounded-2xl border border-gray-200 dark:border-[#272B30] hover:bg-gray-100 dark:hover:bg-neutral-800 text-[#1A1A1A] dark:text-white transition-all cursor-pointer shadow-2xs"
+                className="p-3.5 rounded-2xl border border-white/70 dark:border-white/10 hover:bg-[#F1EFF9] dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-all cursor-pointer shadow-2xs"
                 title={isPaused ? 'Riprendi' : 'Metti in pausa'}
               >
                 {isPaused ? <Play className="w-5 h-5 text-emerald-500 fill-emerald-500" /> : <Pause className="w-5 h-5" />}
@@ -516,7 +608,7 @@ export const RecordingModal: React.FC = () => {
                 id="stop-and-save-recording-btn"
                 type="button"
                 onClick={handleStopAndProcess}
-                className="px-6 py-3.5 rounded-2xl bg-[#761EAF] hover:bg-[#681898] text-white text-xs sm:text-sm font-bold shadow-lg shadow-[#761EAF]/30 flex items-center gap-2 transition-all cursor-pointer"
+                className="px-6 py-3.5 rounded-2xl bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs sm:text-sm font-bold shadow-lg shadow-[#6A49D8]/30 flex items-center gap-2 transition-all cursor-pointer"
               >
                 <Square className="w-4 h-4 fill-white" />
                 <span style={{ fontSize: '13px' }}>Termina & Analizza con Gemini AI</span>
@@ -527,14 +619,14 @@ export const RecordingModal: React.FC = () => {
           /* Ready State: Choose Mic or Upload File */
           <div className="py-3 space-y-5">
             {/* Mode Switcher */}
-            <div className="flex bg-[#F8F9FD] dark:bg-[#111315] p-1 rounded-2xl border border-gray-200/80 dark:border-[#272B30]">
+            <div className="flex bg-[#F3F1FC]/70 dark:bg-black/25 p-1 rounded-2xl border border-[#E6E3F3] dark:border-white/10">
               <button
                 type="button"
                 onClick={() => setActiveMode('mic')}
                 className={`flex-1 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   activeMode === 'mic'
-                    ? 'bg-white dark:bg-[#1A1D1F] text-[#761EAF] shadow-xs'
-                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#1A1A1A] dark:hover:text-white'
+                    ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#6A49D8] shadow-xs'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#16161E] dark:hover:text-white'
                 }`}
               >
                 <Mic className="w-3.5 h-3.5" />
@@ -545,8 +637,8 @@ export const RecordingModal: React.FC = () => {
                 onClick={() => setActiveMode('upload')}
                 className={`flex-1 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   activeMode === 'upload'
-                    ? 'bg-white dark:bg-[#1A1D1F] text-[#761EAF] shadow-xs'
-                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#1A1A1A] dark:hover:text-white'
+                    ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#6A49D8] shadow-xs'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#16161E] dark:hover:text-white'
                 }`}
               >
                 <Upload className="w-3.5 h-3.5" />
@@ -564,12 +656,12 @@ export const RecordingModal: React.FC = () => {
             {activeMode === 'mic' ? (
               /* Live Mic Option */
               <div className="space-y-5 pt-2">
-                <div className="w-16 h-16 rounded-3xl bg-[#761EAF] text-white flex items-center justify-center mx-auto shadow-lg shadow-[#761EAF]/25">
+                <div className="w-16 h-16 rounded-3xl bg-[#6A49D8] text-white flex items-center justify-center mx-auto shadow-lg shadow-[#6A49D8]/25">
                   <Mic className="w-8 h-8" />
                 </div>
 
                 <div>
-                  <h2 className="text-lg font-extrabold text-[#1A1A1A] dark:text-white">
+                  <h2 className="text-lg font-extrabold text-[#16161E] dark:text-white">
                     Registra Riunione con Microfono
                   </h2>
                   <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400 max-w-sm mx-auto font-medium">
@@ -581,7 +673,7 @@ export const RecordingModal: React.FC = () => {
                   id="start-live-mic-btn"
                   type="button"
                   onClick={startLiveRecording}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-[#761EAF] hover:bg-[#681898] text-white text-xs font-bold shadow-md shadow-[#761EAF]/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                  className="w-full py-3.5 px-4 rounded-2xl bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-bold shadow-md shadow-[#6A49D8]/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                 >
                   <Mic className="w-4 h-4" />
                   <span>Avvia Registrazione Audio</span>
@@ -613,10 +705,10 @@ export const RecordingModal: React.FC = () => {
                   onClick={() => fileInputRef.current?.click()}
                   className={`p-6 rounded-3xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center gap-2 ${
                     isDragging
-                      ? 'border-[#761EAF] bg-[#761EAF]/5'
+                      ? 'border-[#6A49D8] bg-[#6A49D8]/5'
                       : uploadedFile
                       ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
-                      : 'border-gray-200 dark:border-[#272B30] hover:border-[#761EAF] bg-[#F8F9FD] dark:bg-[#111315]'
+                      : 'border-[#ECEBF3] dark:border-white/10 hover:border-[#6A49D8] bg-[#F3F1FC]/70 dark:bg-black/25'
                   }`}
                 >
                   {uploadedFile ? (
@@ -624,7 +716,7 @@ export const RecordingModal: React.FC = () => {
                       <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                         <CheckCircle2 className="w-6 h-6" />
                       </div>
-                      <p className="text-xs font-bold text-[#1A1A1A] dark:text-white truncate max-w-[260px]">
+                      <p className="text-xs font-bold text-[#16161E] dark:text-white truncate max-w-[260px]">
                         {uploadedFile.name}
                       </p>
                       <p className="text-[11px] text-gray-400">
@@ -633,10 +725,10 @@ export const RecordingModal: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <div className="w-12 h-12 rounded-2xl bg-[#761EAF]/10 text-[#761EAF] flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-2xl bg-[#6A49D8]/10 text-[#6A49D8] flex items-center justify-center">
                         <FileAudio className="w-6 h-6" />
                       </div>
-                      <p className="text-xs font-bold text-[#1A1A1A] dark:text-white">
+                      <p className="text-xs font-bold text-[#16161E] dark:text-white">
                         Trascina qui il file audio o fai clic per selezionare
                       </p>
                       <p className="text-[11px] text-gray-400">
@@ -651,7 +743,7 @@ export const RecordingModal: React.FC = () => {
                   type="button"
                   disabled={!uploadedFile}
                   onClick={handleProcessUploadedFile}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-[#761EAF] hover:bg-[#681898] text-white text-xs font-bold shadow-md shadow-[#761EAF]/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3.5 px-4 rounded-2xl bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-bold shadow-md shadow-[#6A49D8]/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <AILogo size="sm" />
                   <span>Trascrivi & Analizza File con AI</span>

@@ -25,6 +25,39 @@
   .main-greeting-bold {
     font-weight: bold !important;
   }
+  /* Nome utente nel saluto: la regola globale sopra forza 500 su .font-extrabold, quindi serve questa eccezione */
+  .main-greeting-name {
+    font-weight: 800 !important;
+  }
+
+  /* Dashboard e barra di navigazione ("ds"): pesi reali per titoli e testi in grassetto.
+     Stanno dentro @layer base perché le regole !important dei layer vincono su quelle fuori da un layer. */
+  .ds h1, .ds h2, .ds h3, .ds h4 { font-weight: 600 !important; font-family: 'Poppins', 'Inter', system-ui, sans-serif; }
+  .ds .font-semibold { font-weight: 600 !important; }
+  .ds .font-bold { font-weight: 700 !important; }
+}
+
+/* Font dei titoli (stile del video di riferimento) */
+.font-display {
+  font-family: 'Poppins', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Sfondo sfumato della Dashboard (tema chiaro) */
+.glass-bg {
+  background-color: #F5F3FD;
+  background-image:
+    radial-gradient(60% 38% at 12% 0%, rgba(167, 139, 250, 0.30), transparent 72%),
+    radial-gradient(50% 32% at 100% 6%, rgba(94, 234, 212, 0.30), transparent 72%),
+    radial-gradient(70% 38% at 85% 100%, rgba(244, 167, 200, 0.22), transparent 72%),
+    radial-gradient(60% 38% at 0% 88%, rgba(125, 170, 255, 0.20), transparent 72%);
+}
+/* Sfondo sfumato della Dashboard (tema scuro) */
+.dark .glass-bg {
+  background-color: #0F0D18;
+  background-image:
+    radial-gradient(60% 38% at 10% 0%, rgba(106, 73, 216, 0.38), transparent 72%),
+    radial-gradient(50% 32% at 100% 8%, rgba(45, 212, 191, 0.12), transparent 72%),
+    radial-gradient(70% 38% at 85% 100%, rgba(244, 114, 182, 0.12), transparent 72%);
 }
 
 /* Custom scrollbars */
@@ -71,15 +104,15 @@
 }
 /* Effetto Liquid Glass riutilizzabile per card e popup */
 .glass-card {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 4px 16px rgba(118, 30, 175, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 10px 40px -14px rgba(106, 73, 216, 0.22);
 }
 
 .dark .glass-card {
-  background: rgba(26, 29, 31, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
 }

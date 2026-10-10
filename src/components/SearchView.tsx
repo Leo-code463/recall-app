@@ -90,11 +90,11 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
           }
         }}
         style={{ transform: `translateX(${swipeOffset}px)` }}
-                className="relative z-10 glass-card !bg-white/95 dark:!bg-[#1A1D1F]/95 rounded-3xl p-5 sm:p-6 shadow-xs border border-gray-200/80 dark:border-[#272B30] hover:border-[#761EAF] hover:shadow-md transition-all duration-150 ease-out cursor-pointer flex flex-col justify-between group"
+                className="relative z-10 glass-card !bg-white/85 dark:!bg-[#1B1926]/90 rounded-3xl p-5 sm:p-6 shadow-xs border border-white/70 dark:border-white/10 hover:border-[#6A49D8] hover:shadow-md transition-all duration-150 ease-out cursor-pointer flex flex-col justify-between group"
       >
         <div>
           <div className="flex items-center justify-between gap-2 mb-3">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-md bg-[#761EAF]/10 text-[#761EAF] dark:bg-[#761EAF]/25 dark:text-[#C084FC]">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-md bg-[#6A49D8]/10 text-[#6A49D8] dark:bg-[#6A49D8]/25 dark:text-[#B29FFF]">
               {meeting.category === 'Riunione' ? (language === 'it' ? 'Riunione' : 'Meeting') : (meeting.category || 'Meeting')}
             </span>
             <span className="text-xs font-medium text-gray-400 dark:text-neutral-400 flex items-center gap-1">
@@ -103,7 +103,7 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
             </span>
           </div>
 
-          <h3 className="text-base font-bold text-[#1A1A1A] dark:text-white group-hover:text-[#761EAF] dark:group-hover:text-[#C084FC] transition-colors leading-snug">
+          <h3 className="text-base font-bold text-[#16161E] dark:text-white group-hover:text-[#6A49D8] dark:group-hover:text-[#B29FFF] transition-colors leading-snug">
             {meeting.title}
           </h3>
 
@@ -118,7 +118,7 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
             {meeting.tags.map((t, idx) => (
               <span
                 key={idx}
-                className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[#F8F9FB] dark:bg-[#272B30] text-gray-500 dark:text-neutral-400"
+                className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[#F3F1FC]/70 dark:bg-white/10 text-gray-500 dark:text-neutral-400"
               >
                 #{t}
               </span>
@@ -126,7 +126,7 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
           </div>
         </div>
 
-        <div className="mt-5 pt-3.5 border-t border-gray-100 dark:border-[#272B30] flex items-center justify-between text-xs text-gray-400 dark:text-neutral-400">
+        <div className="mt-5 pt-3.5 border-t border-[#ECEBF3] dark:border-white/10 flex items-center justify-between text-xs text-gray-400 dark:text-neutral-400">
           <div className="flex items-center gap-2 font-medium">
             <Users className="w-3.5 h-3.5 text-gray-400" />
             <span>
@@ -141,7 +141,7 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
               })}
             </span>
           </div>
-          <div className="text-[#761EAF] dark:text-[#C084FC] font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+          <div className="text-[#6A49D8] dark:text-[#B29FFF] font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
             <span>{t('seeSummary')}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -195,8 +195,8 @@ export const SearchView: React.FC = () => {
     return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 pb-20">
       {/* Sticky Header + Search Bar (fissi in alto come Spotify) */}
-      <div className="sticky top-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:top-[calc(1.5rem+env(safe-area-inset-top,0px))] z-30 bg-[#F8F9FB] dark:bg-[#111315] pb-4 space-y-6 sm:space-y-8">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight">
+      <div className="sticky top-0 z-30 -mx-3 sm:mx-0 px-3 sm:px-0 -mt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:-mt-[calc(1.5rem+env(safe-area-inset-top,0px))] pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] bg-[#F5F3FD]/70 dark:bg-[#0F0D18]/70 backdrop-blur-xl pb-4 space-y-6 sm:space-y-8">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-[#16161E] dark:text-white tracking-tight">
           {t('searchTitle')}
         </h1>
 
@@ -208,12 +208,12 @@ export const SearchView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('searchBarPlaceholder')}
-            className="w-full pl-12 pr-24 py-3.5 text-xs sm:text-sm rounded-2xl border border-gray-200/80 dark:border-[#272B30] bg-white dark:bg-[#1A1D1F] text-[#1A1A1A] dark:text-white shadow-xs focus:outline-none focus:ring-2 focus:ring-[#761EAF]"
+            className="w-full pl-12 pr-24 py-3.5 text-xs sm:text-sm rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#16161E] dark:text-white shadow-xs focus:outline-none focus:ring-2 focus:ring-[#6A49D8]"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3.5 top-2.5 text-xs font-bold text-gray-500 hover:text-[#1A1A1A] dark:hover:text-white px-2.5 py-1 bg-gray-100 dark:bg-neutral-800 rounded-lg cursor-pointer transition-colors"
+              className="absolute right-3.5 top-2.5 text-xs font-bold text-gray-500 hover:text-[#16161E] dark:hover:text-white px-2.5 py-1 bg-gray-100 dark:bg-neutral-800 rounded-lg cursor-pointer transition-colors"
             >
               {t('clearBtn')}
             </button>
@@ -232,8 +232,8 @@ export const SearchView: React.FC = () => {
             onClick={() => setSelectedTag(tag)}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
               selectedTag === tag
-                ? 'bg-[#761EAF] text-white shadow-xs'
-                : 'bg-white dark:bg-[#1A1D1F] border border-gray-200/80 dark:border-[#272B30] text-gray-500 dark:text-neutral-400 hover:border-[#761EAF]/50'
+                ? 'bg-[#6A49D8] text-white shadow-xs'
+                : 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] border border-white/70 dark:border-white/10 text-gray-500 dark:text-neutral-400 hover:border-[#6A49D8]/50'
             }`}
           >
             {getTagLabel(tag)}
@@ -262,11 +262,11 @@ export const SearchView: React.FC = () => {
             ))}
           </div>
         ) : meetings.length === 0 ? (
-          <div className="bg-white dark:bg-[#1A1D1F] rounded-3xl p-10 sm:p-12 text-center border border-gray-200/80 dark:border-[#272B30] space-y-3">
-            <div className="w-14 h-14 rounded-2xl bg-[#761EAF]/10 text-[#761EAF] flex items-center justify-center mx-auto">
+          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-10 sm:p-12 text-center border border-white/70 dark:border-white/10 space-y-3 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
+            <div className="w-14 h-14 rounded-2xl bg-[#6A49D8]/10 text-[#6A49D8] flex items-center justify-center mx-auto">
               <Mic className="w-7 h-7" />
             </div>
-            <h3 className="text-base font-bold text-[#1A1A1A] dark:text-white">
+            <h3 className="text-base font-bold text-[#16161E] dark:text-white">
               {t('noRecordings')}
             </h3>
             <p className="text-xs text-gray-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed">
@@ -274,16 +274,16 @@ export const SearchView: React.FC = () => {
             </p>
             <button
               onClick={() => setIsRecordingModalOpen(true)}
-              className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#761EAF] hover:bg-[#681898] text-white text-xs font-bold shadow-md shadow-[#761EAF]/25 transition-all cursor-pointer"
+              className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-bold shadow-md shadow-[#6A49D8]/25 transition-all cursor-pointer"
             >
               <Mic className="w-4 h-4" />
               <span>{t('startFirstRecording')}</span>
             </button>
           </div>
         ) : (
-          <div className="bg-white dark:bg-[#1A1D1F] rounded-3xl p-10 text-center border border-gray-200/80 dark:border-[#272B30] space-y-2">
+          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-10 text-center border border-white/70 dark:border-white/10 space-y-2 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
             <Search className="w-8 h-8 text-gray-300 dark:text-neutral-600 mx-auto mb-2" />
-            <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">
+            <p className="text-sm font-bold text-[#16161E] dark:text-white">
               {t('noSearchMatch')}
             </p>
             <p className="text-xs text-gray-400 dark:text-neutral-400 font-medium">
@@ -294,7 +294,7 @@ export const SearchView: React.FC = () => {
                 setSearchQuery('');
                 setSelectedTag('Tutti');
               }}
-              className="mt-2 px-4 py-2 bg-gray-100 dark:bg-neutral-800 text-xs font-bold text-[#1A1A1A] dark:text-white rounded-xl hover:bg-gray-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+              className="mt-2 px-4 py-2 bg-gray-100 dark:bg-neutral-800 text-xs font-bold text-[#16161E] dark:text-white rounded-xl hover:bg-gray-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
             >
               {t('showAllRecordings')}
             </button>

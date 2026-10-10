@@ -58,10 +58,10 @@ export const AILogo: React.FC<AILogoProps> = ({
       >
         <defs>
           <linearGradient id="aiLogoRadialGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#6B1D9F" />
-            <stop offset="35%" stopColor="#7B22BC" />
-            <stop offset="70%" stopColor="#9C44D4" />
-            <stop offset="100%" stopColor="#BC6EEB" />
+            <stop offset="0%" stopColor="#5B3CC4" />
+            <stop offset="35%" stopColor="#7556E0" />
+            <stop offset="70%" stopColor="#8C72EC" />
+            <stop offset="100%" stopColor="#A088F9" />
           </linearGradient>
         </defs>
 
@@ -88,7 +88,7 @@ export const AILogo: React.FC<AILogoProps> = ({
           cx="100"
           cy="100"
           r={centerRadius}
-          fill="#761EAF"
+          fill="#6A49D8"
           className={isThinking ? 'animate-pulse' : ''}
         />
       </svg>

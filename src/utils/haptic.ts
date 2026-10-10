@@ -1,14 +1,24 @@
+import { Capacitor } from '@capacitor/core';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
+
+export type HapticStrength = 'light' | 'medium';
+
 /**
- * Utility to trigger subtle haptic feedback (vibration) on supported devices.
- * Uses the Web Vibration API with safe fallback guards.
+ * Piccola vibrazione al tocco, da usare SOLO sulle icone principali (barra in basso e icone dell'header).
+ * - App Android/iOS: usa il plugin nativo di Capacitor (funziona anche nell'APK).
+ * - Browser: ripiega su navigator.vibrate, se il dispositivo lo supporta.
+ * Non lancia mai errori: se la vibrazione non è disponibile non succede nulla.
  */
-export const triggerHaptic = (duration: number = 10) => {
-  if (typeof navigator !== 'undefined' && navigator.vibrate) {
-    try {
-      // A small vibration gives an elegant, high-end mobile feel
-      navigator.vibrate(duration);
-    } catch (e) {
-      // Fallback silently if blocked or unsupported by browser sandbox
+export const hapticTap = (strength: HapticStrength = 'light'): void => {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      Haptics.impact({ style: strength === 'medium' ? ImpactStyle.Medium : ImpactStyle.Light }).catch(() => {});
+      return;
     }
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(strength === 'medium' ? 18 : 10);
+    }
+  } catch {
+    // Vibrazione non disponibile o bloccata: si ignora in silenzio
   }
 };

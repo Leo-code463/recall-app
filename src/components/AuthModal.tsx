@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { AILogo } from './AILogo';
 import { motion, AnimatePresence } from 'motion/react';
-import { triggerHaptic } from '../utils/haptic';
 
 export const AuthModal: React.FC = () => {
   const { loginWithEmail, registerWithEmail, loginWithGoogle, isDarkMode, toggleTheme } = useApp();
@@ -81,7 +80,7 @@ export const AuthModal: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FD] dark:bg-[#111315] flex flex-col justify-between py-8 px-4 sm:px-6 lg:px-8 transition-colors">
+    <div className="min-h-screen flex flex-col justify-between py-8 px-4 sm:px-6 lg:px-8 transition-colors">
       {/* Top Navbar / Theme Switcher */}
       <div className="max-w-md w-full mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -93,7 +92,7 @@ export const AuthModal: React.FC = () => {
           type="button"
           onClick={toggleTheme}
           title={isDarkMode ? 'Passa alla modalità chiara' : 'Passa alla modalità scura'}
-          className="p-2 rounded-xl text-gray-600 dark:text-neutral-300 hover:bg-white dark:hover:bg-[#1A1D1F] border border-gray-200 dark:border-[#272B30] shadow-2xs transition-colors cursor-pointer"
+          className="p-2 rounded-xl text-gray-600 dark:text-neutral-300 hover:bg-white dark:hover:bg-white/[0.09] border border-white/70 dark:border-white/10 shadow-2xs transition-colors cursor-pointer"
         >
           {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
         </button>
@@ -105,7 +104,7 @@ export const AuthModal: React.FC = () => {
           <div className="inline-flex justify-center mb-3">
             <AILogo size="2xl" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#16161E] dark:text-white tracking-tight">
             {isSignUp ? 'Crea il tuo account' : 'Bentornato'}
           </h1>
           <p className="mt-1.5 text-xs sm:text-sm text-gray-500 dark:text-neutral-400 font-medium">
@@ -123,35 +122,32 @@ export const AuthModal: React.FC = () => {
             if (info.offset.x < -85) {
               // Swipe left -> register
               if (!isSignUp) {
-                triggerHaptic(12);
                 setIsSignUp(true);
                 setError(null);
               }
             } else if (info.offset.x > 85) {
               // Swipe right -> login
               if (isSignUp) {
-                triggerHaptic(12);
                 setIsSignUp(false);
                 setError(null);
               }
             }
           }}
-          className="bg-white dark:bg-[#1A1D1F] py-7 px-6 sm:px-8 rounded-3xl shadow-sm border border-gray-200 dark:border-[#272B30] transition-colors relative cursor-grab active:cursor-grabbing select-none"
+          className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] py-7 px-6 sm:px-8 rounded-[28px] border border-white/70 dark:border-white/10 transition-colors relative cursor-grab active:cursor-grabbing select-none shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none"
         >
           {/* Tab Switcher: Accedi / Registrati */}
-          <div className="flex bg-[#F8F9FD] dark:bg-[#111315] p-1 rounded-2xl mb-6 border border-gray-200/80 dark:border-[#272B30]">
+          <div className="flex bg-[#F3F1FC]/70 dark:bg-black/25 p-1 rounded-2xl mb-6 border border-[#E6E3F3] dark:border-white/10">
             <button
               id="auth-tab-login"
               type="button"
               onClick={() => {
-                triggerHaptic(10);
                 setIsSignUp(false);
                 setError(null);
               }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 !isSignUp
-                  ? 'bg-white dark:bg-[#1A1D1F] text-[#1A1A1A] dark:text-white shadow-xs'
-                  : 'text-gray-500 dark:text-neutral-400 hover:text-[#1A1A1A] dark:hover:text-white'
+                  ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#16161E] dark:text-white shadow-xs'
+                  : 'text-gray-500 dark:text-neutral-400 hover:text-[#16161E] dark:hover:text-white'
               }`}
             >
               Accedi
@@ -160,14 +156,13 @@ export const AuthModal: React.FC = () => {
               id="auth-tab-signup"
               type="button"
               onClick={() => {
-                triggerHaptic(10);
                 setIsSignUp(true);
                 setError(null);
               }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 isSignUp
-                  ? 'bg-white dark:bg-[#1A1D1F] text-[#1A1A1A] dark:text-white shadow-xs'
-                  : 'text-gray-500 dark:text-neutral-400 hover:text-[#1A1A1A] dark:hover:text-white'
+                  ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#16161E] dark:text-white shadow-xs'
+                  : 'text-gray-500 dark:text-neutral-400 hover:text-[#16161E] dark:hover:text-white'
               }`}
             >
               Registrati
@@ -188,7 +183,7 @@ export const AuthModal: React.FC = () => {
                 type="button"
                 onClick={handleGoogleAuth}
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl border border-gray-200 dark:border-[#272B30] bg-white dark:bg-[#111315] text-[#1A1A1A] dark:text-white text-xs font-bold hover:bg-gray-50 dark:hover:bg-[#272B30] transition-all shadow-2xs hover:shadow-xs active:scale-[0.99] cursor-pointer disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-bold hover:bg-gray-50 dark:hover:bg-white/10 transition-all shadow-2xs hover:shadow-xs active:scale-[0.99] cursor-pointer disabled:opacity-50"
               >
                 <svg className="w-4.5 h-4.5" viewBox="0 0 24 24">
                   <path
@@ -213,8 +208,8 @@ export const AuthModal: React.FC = () => {
 
               {/* Divider */}
               <div className="relative flex items-center justify-center my-5">
-                <div className="border-t border-gray-200 dark:border-[#272B30] w-full" />
-                <span className="bg-white dark:bg-[#1A1D1F] px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500 absolute">
+                <div className="border-t border-[#ECEBF3] dark:border-white/10 w-full" />
+                <span className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500 absolute">
                   {isSignUp ? 'oppure registrati via email' : 'oppure con email'}
                 </span>
               </div>
@@ -223,7 +218,7 @@ export const AuthModal: React.FC = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {isSignUp && (
                   <div>
-                    <label className="block text-xs font-bold text-[#1A1A1A] dark:text-white mb-1.5">
+                    <label className="block text-xs font-bold text-[#16161E] dark:text-white mb-1.5">
                       Nome e Cognome *
                     </label>
                     <div className="relative">
@@ -235,14 +230,14 @@ export const AuthModal: React.FC = () => {
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Il tuo nome e cognome"
-                        className="w-full pl-10 pr-3.5 py-3 rounded-2xl border border-gray-200 dark:border-[#272B30] bg-[#F8F9FD] dark:bg-[#111315] text-[#1A1A1A] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#761EAF] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
+                        className="w-full pl-10 pr-3.5 py-3 rounded-2xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#6A49D8] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
                       />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-[#1A1A1A] dark:text-white mb-1.5">
+                  <label className="block text-xs font-bold text-[#16161E] dark:text-white mb-1.5">
                     Email *
                   </label>
                   <div className="relative">
@@ -254,13 +249,13 @@ export const AuthModal: React.FC = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="nome@azienda.com"
-                      className="w-full pl-10 pr-3.5 py-3 rounded-2xl border border-gray-200 dark:border-[#272B30] bg-[#F8F9FD] dark:bg-[#111315] text-[#1A1A1A] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#761EAF] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
+                      className="w-full pl-10 pr-3.5 py-3 rounded-2xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#6A49D8] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#1A1A1A] dark:text-white mb-1.5">
+                  <label className="block text-xs font-bold text-[#16161E] dark:text-white mb-1.5">
                     Password *
                   </label>
                   <div className="relative">
@@ -272,7 +267,7 @@ export const AuthModal: React.FC = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={isSignUp ? 'Almeno 6 caratteri' : 'La tua password'}
-                      className="w-full pl-10 pr-10 py-3 rounded-2xl border border-gray-200 dark:border-[#272B30] bg-[#F8F9FD] dark:bg-[#111315] text-[#1A1A1A] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#761EAF] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
+                      className="w-full pl-10 pr-10 py-3 rounded-2xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#6A49D8] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
                     />
                     <button
                       type="button"
@@ -294,7 +289,7 @@ export const AuthModal: React.FC = () => {
                   id="auth-submit-btn"
                   type="submit"
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-[#761EAF] hover:bg-[#681898] text-white text-xs font-bold shadow-md shadow-[#761EAF]/25 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50 mt-2"
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-bold shadow-md shadow-[#6A49D8]/25 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50 mt-2"
                 >
                   {loading ? (
                     <span>Elaborazione in corso...</span>
@@ -316,7 +311,7 @@ export const AuthModal: React.FC = () => {
 
           {/* Swipe indicator label */}
           <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-gray-400 dark:text-neutral-500 font-bold uppercase tracking-wider">
-            <Hand className="w-3.5 h-3.5 text-[#761EAF]/50 animate-bounce" />
+            <Hand className="w-3.5 h-3.5 text-[#6A49D8]/50 animate-bounce" />
             <span>Trascina per passare a {isSignUp ? 'Accedi' : 'Registrati'}</span>
           </div>
         </motion.div>

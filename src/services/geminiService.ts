@@ -12,15 +12,6 @@ export interface ProcessedMeetingResult {
   calendarEventsDetected: DetectedCalendarEvent[];
 }
 
-function cleanBase64(input?: string): string | undefined {
-  if (!input) return undefined;
-  const commaIdx = input.indexOf(',');
-  if (commaIdx !== -1) {
-    return input.slice(commaIdx + 1).trim();
-  }
-  return input.trim();
-}
-
 function parseErrorMessage(err: any, fallback: string): string {
   if (!err) return fallback;
   let raw = "";
@@ -44,8 +35,8 @@ function parseErrorMessage(err: any, fallback: string): string {
   if (raw.includes("high demand") || raw.includes("503") || raw.includes("overloaded") || raw.includes("RESOURCE_EXHAUSTED") || raw.includes("spikes in demand")) {
     return "I server IA stanno elaborando un elevato volume di richieste. Riprova tra qualche istante.";
   }
-  if (raw.includes("GEMINI_API_KEY")) {
-    return "Chiave API Gemini non configurata o non valida.";
+  if (raw.includes("OLLAMA_API_KEY") || raw.includes("401")) {
+    return "Servizio IA non configurato correttamente (chiave API mancante o non valida).";
   }
   return raw || fallback;
 }
@@ -135,22 +126,16 @@ export function fallbackHeuristicTaskAnalysis(
 }
 
 export async function processMeetingFastApi(params: {
-  audioBase64?: string;
-  mimeType?: string;
-  liveTranscript?: string;
+  text: string; // trascrizione già prodotta sul dispositivo (mai audio)
   plan: PlanType;
   languageHint?: string;
   referenceDate?: string;
 }): Promise<ProcessedMeetingResult> {
-  const sanitizedAudio = cleanBase64(params.audioBase64);
-
   const response = await apiFetch(`/api/process-meeting`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      audioData: sanitizedAudio,
-      mimeType: params.mimeType || 'audio/webm',
-      liveTranscript: params.liveTranscript,
+      text: params.text,
       plan: params.plan,
       languageHint: params.languageHint || 'it',
       referenceDate: params.referenceDate || new Date().toISOString().split('T')[0],
@@ -204,16 +189,14 @@ export async function processMeetingFastApi(params: {
       : [{ id: 'spk_1', name: 'Interlocutore 1', color: '#761EAF' }],
     segments: data.segments && data.segments.length > 0
       ? data.segments
-      : [{ id: 'seg_1', speakerId: 'spk_1', speakerName: 'Interlocutore 1', timeOffset: 0, text: params.liveTranscript || 'Trascrizione completata.' }],
+      : [{ id: 'seg_1', speakerId: 'spk_1', speakerName: 'Interlocutore 1', timeOffset: 0, text: params.text || 'Trascrizione completata.' }],
     summary: formattedSummary,
     calendarEventsDetected: formattedEvents,
   };
 }
 
 export async function transcribeAudioApi(params: {
-  audioBase64?: string;
-  mimeType?: string;
-  liveTranscript?: string;
+  text: string; // trascrizione già prodotta sul dispositivo (mai audio)
   plan: PlanType;
   languageHint?: string;
 }): Promise<{
@@ -223,15 +206,11 @@ export async function transcribeAudioApi(params: {
   speakers: Array<{ id: string; name: string; role?: string; color: string }>;
   segments: Array<{ id: string; speakerId: string; speakerName: string; timeOffset: number; text: string }>;
 }> {
-  const sanitizedAudio = cleanBase64(params.audioBase64);
-
   const response = await apiFetch(`/api/transcribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      audioData: sanitizedAudio,
-      mimeType: params.mimeType || 'audio/webm',
-      liveTranscript: params.liveTranscript,
+      text: params.text,
       plan: params.plan,
       languageHint: params.languageHint || 'it',
     }),

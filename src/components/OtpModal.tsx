@@ -128,14 +128,14 @@ export const OtpModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="glass-card max-w-md w-full rounded-3xl p-6 sm:p-8 text-center shadow-xl">
-        <div className="w-14 h-14 rounded-2xl bg-[#761EAF]/10 text-[#761EAF] flex items-center justify-center mx-auto mb-4">
+        <div className="w-14 h-14 rounded-2xl bg-[#6A49D8]/10 text-[#6A49D8] flex items-center justify-center mx-auto mb-4">
           <ShieldCheck className="w-7 h-7" />
         </div>
 
-        <h3 className="text-xl font-bold text-[#1A1D1F] dark:text-white">Verifica la tua Email</h3>
+        <h3 className="text-xl font-bold text-[#16161E] dark:text-white">Verifica la tua Email</h3>
         <p className="mt-2 text-xs text-[#6F767E] dark:text-[#9A9FA5] leading-relaxed">
           Abbiamo inviato un codice di sicurezza a 6 cifre a{' '}
-          <strong className="text-[#1A1D1F] dark:text-white">{pendingOtpEmail || 'tua email'}</strong>.
+          <strong className="text-[#16161E] dark:text-white">{pendingOtpEmail || 'tua email'}</strong>.
           Controlla anche la cartella spam.
         </p>
 
@@ -154,7 +154,7 @@ export const OtpModal: React.FC = () => {
               value={digit}
               onChange={(e) => handleChange(idx, e.target.value)}
               onKeyDown={(e) => handleKeyDown(idx, e)}
-              className="w-11 h-12 sm:w-12 sm:h-14 text-center font-bold text-xl rounded-xl border border-[#EFEFEF] dark:border-[#272B30] bg-[#F8F9FD] dark:bg-[#111315] text-[#1A1D1F] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#761EAF] transition-all"
+              className="w-11 h-12 sm:w-12 sm:h-14 text-center font-bold text-xl rounded-xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#6A49D8] transition-all"
             />
           ))}
         </div>
@@ -176,7 +176,7 @@ export const OtpModal: React.FC = () => {
           id="otp-verify-submit-btn"
           onClick={handleVerify}
           disabled={isVerifying}
-          className="w-full py-3 px-4 rounded-xl bg-[#761EAF] hover:bg-[#681898] text-white text-sm font-semibold shadow-sm shadow-[#761EAF]/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
+          className="w-full py-3 px-4 rounded-xl bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-sm font-semibold shadow-sm shadow-[#6A49D8]/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
         >
           <span>{isVerifying ? 'Verifica in corso...' : 'Conferma e Accedi'}</span>
           <ArrowRight className="w-4 h-4" />
@@ -189,7 +189,7 @@ export const OtpModal: React.FC = () => {
             <button
               onClick={handleResend}
               disabled={isResending}
-              className="font-semibold text-[#761EAF] dark:text-[#C084FC] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer disabled:opacity-50 disabled:no-underline"
+              className="font-semibold text-[#6A49D8] dark:text-[#B29FFF] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer disabled:opacity-50 disabled:no-underline"
             >
               <RotateCw className={`w-3.5 h-3.5 ${isResending ? 'animate-spin' : ''}`} />
               <span>{isResending ? 'Invio in corso...' : 'Invia nuovo codice'}</span>
