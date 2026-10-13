@@ -117,8 +117,8 @@ function cleanText(value: unknown, maxLen: number): string {
 }
 
 // --- IA: Ollama locale (API compatibile OpenAI) ---
-// Tutte le richieste di TESTO passano da qui. L'audio NON arriva mai al server:
-// la trascrizione avviene sul dispositivo e il server riceve solo testo.
+// Tutte le richieste di TESTO passano da qui. L'audio arriva solo a /api/transcribe-audio,
+// che lo inoltra a Groq Whisper e restituisce solo testo; le altre rotte ricevono sempre testo.
 const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1").replace(/\/+$/, "");
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
 const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || "ollama"; // fittizia: Ollama non la richiede
@@ -787,6 +787,158 @@ Se l'utente ti chiede di formulare una mail di recap, una lista di task o un mes
     });
   }
 });
+
+// --- TRASCRIZIONE AUDIO: Groq Whisper (whisper-large-v3) con limite giornaliero per utente ---
+// L'app invia qui l'audio registrato (corpo grezzo, Content-Type audio/*). Il server lo inoltra a Groq
+// e restituisce solo il testo. Il consumo è contato per utente autenticato (uid Firebase).
+const GROQ_TRANSCRIBE_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
+const GROQ_WHISPER_MODEL = process.env.GROQ_WHISPER_MODEL || "whisper-large-v3";
+// Chiave: GROQ_API_KEY; in alternativa riusa OLLAMA_API_KEY solo se l'IA di testo punta già a Groq.
+const GROQ_API_KEY =
+  process.env.GROQ_API_KEY || (/groq\.com/i.test(OLLAMA_BASE_URL) ? process.env.OLLAMA_API_KEY || "" : "");
+// Secondi di audio al giorno per utente (default 60 minuti). Cambiabile da Render con TRANSCRIBE_DAILY_LIMIT_SEC.
+const TRANSCRIBE_DAILY_LIMIT_SEC = Number(process.env.TRANSCRIBE_DAILY_LIMIT_SEC) || 60 * 60;
+const TRANSCRIBE_MAX_BYTES = 25 * 1024 * 1024; // limite file del piano gratuito Groq
+const TRANSCRIBE_TIMEOUT_MS = Number(process.env.TRANSCRIBE_TIMEOUT_MS) || 120_000;
+
+// Contatore in memoria (si azzera a ogni riavvio/deploy di Render): chiave uid -> secondi usati oggi (UTC)
+const transcribeUsage = new Map<string, { day: string; seconds: number }>();
+
+function utcDay(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function getTranscribeUsed(uid: string): number {
+  const u = transcribeUsage.get(uid);
+  return u && u.day === utcDay() ? u.seconds : 0;
+}
+function addTranscribeUsed(uid: string, seconds: number): void {
+  transcribeUsage.set(uid, { day: utcDay(), seconds: getTranscribeUsed(uid) + seconds });
+}
+
+setInterval(() => {
+  const day = utcDay();
+  for (const [uid, u] of transcribeUsage) if (u.day !== day) transcribeUsage.delete(uid);
+}, 60 * 60 * 1000).unref();
+
+const AUDIO_EXTENSIONS: Record<string, string> = {
+  "audio/webm": "webm",
+  "video/webm": "webm",
+  "audio/ogg": "ogg",
+  "audio/mp4": "m4a",
+  "audio/m4a": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "m4a",
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav",
+};
+
+app.post(
+  "/api/transcribe-audio",
+  express.raw({ type: ["audio/*", "video/webm", "application/octet-stream"], limit: TRANSCRIBE_MAX_BYTES }),
+  async (req, res) => {
+    try {
+      if (!GROQ_API_KEY) {
+        console.error("[transcribe-audio] GROQ_API_KEY mancante (e OLLAMA_BASE_URL non punta a Groq).");
+        return res.status(503).json({ success: false, error: "Trascrizione non configurata sul server." });
+      }
+
+      const audio = req.body as Buffer;
+      if (!Buffer.isBuffer(audio) || audio.length < 1000) {
+        return res.status(400).json({ success: false, error: "Audio mancante o troppo breve." });
+      }
+
+      const uid = req.authUser!.uid;
+      const used = getTranscribeUsed(uid);
+      if (used >= TRANSCRIBE_DAILY_LIMIT_SEC) {
+        return res.status(429).json({
+          success: false,
+          error: `Hai raggiunto il limite giornaliero di trascrizione (${Math.round(TRANSCRIBE_DAILY_LIMIT_SEC / 60)} minuti). Riprova domani.`,
+          code: "TRANSCRIBE_DAILY_LIMIT",
+        });
+      }
+
+      const mime = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+      const ext = AUDIO_EXTENSIONS[mime] || "webm";
+      const declared = Number(req.headers["x-audio-duration"]);
+      const langHeader = String(req.headers["x-audio-language"] || "it").toLowerCase();
+      const language = /^[a-z]{2}$/.test(langHeader) ? langHeader : "it";
+
+      const form = new FormData();
+      form.append("file", new Blob([audio as unknown as BlobPart], { type: mime || "audio/webm" }), `registrazione.${ext}`);
+      form.append("model", GROQ_WHISPER_MODEL);
+      form.append("language", language);
+      form.append("temperature", "0");
+      form.append("response_format", "verbose_json"); // include la durata reale dell'audio
+      if (language === "it") {
+        form.append("prompt", "Trascrizione di una riunione di lavoro in italiano, con punteggiatura corretta.");
+      }
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TRANSCRIBE_TIMEOUT_MS);
+      let groqRes: Response;
+      try {
+        groqRes = await fetch(GROQ_TRANSCRIBE_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+          body: form,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+
+      if (!groqRes.ok) {
+        const body = await groqRes.text();
+        console.error(`[transcribe-audio] Groq HTTP ${groqRes.status}: ${body.slice(0, 300)}`);
+        if (groqRes.status === 429) {
+          return res.status(503).json({
+            success: false,
+            error: "Il servizio di trascrizione è molto richiesto in questo momento. Riprova tra qualche minuto.",
+            code: "TRANSCRIBE_BUSY",
+          });
+        }
+        if (groqRes.status === 400 || groqRes.status === 413) {
+          return res.status(422).json({ success: false, error: "Audio non valido o troppo grande per la trascrizione." });
+        }
+        if (groqRes.status === 401 || groqRes.status === 403) {
+          return res.status(503).json({ success: false, error: "Trascrizione non configurata correttamente sul server." });
+        }
+        return res.status(502).json({ success: false, error: "Errore dal servizio di trascrizione. Riprova." });
+      }
+
+      const data: any = await groqRes.json();
+      const text = typeof data?.text === "string" ? data.text.trim() : "";
+      // Si addebita la durata reale riportata da Groq (fallback: quella dichiarata dal client, minimo 10 s come la fatturazione Groq)
+      const realDuration = Number(data?.duration);
+      const charged = Math.max(10, Math.ceil(realDuration > 0 ? realDuration : declared > 0 ? declared : 10));
+      addTranscribeUsed(uid, charged);
+
+      return res.json({
+        success: true,
+        text,
+        durationSec: realDuration > 0 ? realDuration : undefined,
+        remainingSec: Math.max(0, TRANSCRIBE_DAILY_LIMIT_SEC - getTranscribeUsed(uid)),
+      });
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        return res.status(504).json({ success: false, error: "La trascrizione ha impiegato troppo tempo. Riprova." });
+      }
+      console.error("[transcribe-audio]", err);
+      return res.status(500).json({ success: false, error: "Errore interno di trascrizione." });
+    }
+  },
+  // Errori del parser del corpo (es. file oltre i 25 MB)
+  (err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err?.type === "entity.too.large") {
+      return res.status(413).json({ success: false, error: "File audio troppo grande (max 25 MB)." });
+    }
+    console.error("[transcribe-audio] body error", err);
+    return res.status(400).json({ success: false, error: "Richiesta audio non valida." });
+  }
+);
 
 // --- VERIFICA EMAIL CON CODICE OTP (generato e controllato solo dal server) ---
 interface OtpChallenge {

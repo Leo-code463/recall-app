@@ -1,14 +1,18 @@
-// Trascrizione audio ON-DEVICE con Whisper (Transformers.js in un Web Worker).
-// L'audio resta sul telefono: al server va solo il testo risultante.
+// Trascrizione audio tramite il backend (Groq Whisper large-v3).
+// L'audio viene inviato a /api/transcribe-audio; il server restituisce solo il testo.
+// Mantiene la stessa API pubblica della vecchia versione on-device, quindi RecordingModal non va modificato.
+import { getAuth } from 'firebase/auth';
+import { API_BASE } from '../config';
 
-// Modello: 'Xenova/whisper-base' (migliore) oppure 'Xenova/whisper-tiny' (più veloce, meno preciso in italiano)
-export const WHISPER_MODEL = 'Xenova/whisper-base';
+export const WHISPER_MODEL = 'whisper-large-v3 (Groq)';
 export const WHISPER_LANGUAGE = 'italian';
 
 const SAMPLE_RATE = 16000;
-const CHUNK_SECONDS = 28; // finestre < 30s (limite di Whisper), tagliate sui momenti di silenzio
-const SILENCE_RMS = 0.0025; // finestre quasi mute vengono saltate (evita "allucinazioni" di Whisper)
+// Sopra questa soglia il file non entra in una sola richiesta (limite Groq 25 MB): viene decodificato e diviso.
+const MAX_DIRECT_BYTES = 23 * 1024 * 1024;
+const LARGE_CHUNK_SECONDS = 600; // 10 minuti per pezzo (WAV 16 kHz mono = circa 19 MB)
 const MIN_CHUNK_SECONDS = 0.3;
+const CHUNK_SECONDS = 28;
 
 export interface LocalTranscribeProgress {
   stage: 'decoding' | 'model' | 'transcribing';
@@ -26,98 +30,102 @@ export interface LocalTranscribeResult {
   durationSec: number;
 }
 
-// ---------- Worker ----------
-let worker: Worker | null = null;
-let readyPromise: Promise<void> | null = null;
-let readyHandlers: { resolve: () => void; reject: (e: Error) => void } | null = null;
-let nextId = 1;
-const pending = new Map<number, { resolve: (t: string) => void; reject: (e: Error) => void }>();
-const progressListeners = new Set<(percent: number) => void>();
-
-function failAll(error: Error) {
-  readyHandlers?.reject(error);
-  readyHandlers = null;
-  for (const p of pending.values()) p.reject(error);
-  pending.clear();
-}
-
-function getWorker(): Worker {
-  if (worker) return worker;
-  const w = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), { type: 'module' });
-  w.onmessage = (e: MessageEvent) => {
-    const msg: any = e.data;
-    if (msg.type === 'model-progress') {
-      progressListeners.forEach((fn) => fn(msg.percent));
-    } else if (msg.type === 'ready') {
-      readyHandlers?.resolve();
-      readyHandlers = null;
-    } else if (msg.type === 'chunk-result') {
-      pending.get(msg.id)?.resolve(msg.text);
-      pending.delete(msg.id);
-    } else if (msg.type === 'error') {
-      const err = new Error(msg.message || 'Errore del trascrittore locale');
-      if (typeof msg.id === 'number' && pending.has(msg.id)) {
-        pending.get(msg.id)!.reject(err);
-        pending.delete(msg.id);
-      } else {
-        readyHandlers?.reject(err);
-        readyHandlers = null;
-      }
-    }
-  };
-  w.onerror = (e: ErrorEvent) => {
-    const err = new Error(e.message || 'Impossibile avviare il trascrittore locale');
-    failAll(err);
-    worker = null;
-    readyPromise = null;
-  };
-  worker = w;
-  return w;
-}
-
-/** Scarica/carica il modello Whisper (la prima volta serve internet, poi resta in cache sul dispositivo). */
+/** Compatibilità: con il backend non c'è nessun modello da scaricare. */
 export function preloadWhisper(onProgress?: (percent: number) => void): Promise<void> {
-  if (onProgress) progressListeners.add(onProgress);
-  if (!readyPromise) {
-    readyPromise = new Promise<void>((resolve, reject) => {
-      readyHandlers = { resolve, reject };
-      getWorker().postMessage({ type: 'load', model: WHISPER_MODEL });
-    });
-    readyPromise.catch(() => {
-      readyPromise = null; // permette di riprovare
-    });
-  }
-  const done = () => {
-    if (onProgress) progressListeners.delete(onProgress);
+  onProgress?.(100);
+  return Promise.resolve();
+}
+
+/** Compatibilità: nessuna memoria da liberare. */
+export function releaseWhisper() {}
+
+// ---------- Rete ----------
+const LANGUAGE_CODES: Record<string, string> = {
+  italian: 'it',
+  english: 'en',
+  french: 'fr',
+  german: 'de',
+  spanish: 'es',
+  portuguese: 'pt',
+};
+
+function toLanguageCode(language: string): string {
+  const l = language.trim().toLowerCase();
+  if (/^[a-z]{2}$/.test(l)) return l;
+  return LANGUAGE_CODES[l] || 'it';
+}
+
+async function getIdToken(): Promise<string> {
+  const user = getAuth().currentUser;
+  if (!user) throw new Error('Devi accedere per trascrivere una registrazione.');
+  return user.getIdToken();
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function uploadForTranscription(
+  blob: Blob,
+  durationSec: number,
+  language: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const token = await getIdToken();
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': blob.type || 'audio/webm',
+    'X-Audio-Language': toLanguageCode(language),
   };
-  return readyPromise.then(
-    () => done(),
-    (err) => {
-      done();
-      throw err;
+  if (durationSec > 0) headers['X-Audio-Duration'] = String(Math.ceil(durationSec));
+
+  let lastError: Error = new Error('Errore di trascrizione');
+  // Un solo nuovo tentativo, utile quando Render si sta "svegliando" (502/503/504) o la rete cade un attimo
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE}/api/transcribe-audio`, { method: 'POST', headers, body: blob, signal });
+      const data: any = await res.json().catch(() => ({}));
+      if (res.ok && data?.success !== false) return typeof data.text === 'string' ? data.text : '';
+      lastError = new Error(data?.error || `Errore di trascrizione (HTTP ${res.status})`);
+      if (![502, 503, 504].includes(res.status) || data?.code === 'TRANSCRIBE_BUSY') throw lastError;
+    } catch (err: any) {
+      if (err?.name === 'AbortError') throw err;
+      if (err === lastError) throw err;
+      lastError = new Error('Impossibile contattare il server. Controlla la connessione e riprova.');
     }
-  );
-}
-
-/** Libera la memoria del modello (si ricarica dalla cache alla prossima trascrizione). */
-export function releaseWhisper() {
-  if (worker) {
-    failAll(new Error('Trascrittore locale arrestato'));
-    worker.terminate();
-    worker = null;
+    if (attempt === 0) await sleep(3000);
   }
-  readyPromise = null;
+  throw lastError;
 }
 
-function transcribeChunk(audio: Float32Array, language: string): Promise<string> {
-  const id = nextId++;
-  return new Promise<string>((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-    getWorker().postMessage({ type: 'chunk', id, audio, language, model: WHISPER_MODEL }, [audio.buffer]);
+// ---------- Durata e decodifica ----------
+/** Durata di un blob audio. I file webm di MediaRecorder dichiarano durata Infinity: si forza il calcolo. */
+function probeDuration(blob: Blob): Promise<number> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const a = new Audio();
+    let finished = false;
+    const finish = (d: number) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      a.onloadedmetadata = null;
+      a.ontimeupdate = null;
+      a.onerror = null;
+      a.removeAttribute('src');
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(d) && d > 0 ? d : 0);
+    };
+    const timer = setTimeout(() => finish(0), 5000);
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => {
+      if (Number.isFinite(a.duration) && a.duration > 0) return finish(a.duration);
+      a.ontimeupdate = () => finish(a.duration);
+      a.currentTime = 1e101;
+    };
+    a.onerror = () => finish(0);
+    a.src = url;
   });
 }
 
-// ---------- Decodifica audio -> PCM mono 16 kHz ----------
 function mixToMono(buf: AudioBuffer): Float32Array {
   if (buf.numberOfChannels === 1) return buf.getChannelData(0);
   const out = new Float32Array(buf.length);
@@ -147,7 +155,7 @@ async function decodeTo16kMono(blob: Blob): Promise<Float32Array> {
       ctx.close().catch(() => {});
     }
   } catch (firstErr) {
-    console.warn('[Whisper] Decodifica a 16 kHz non riuscita, provo il ricampionamento manuale', firstErr);
+    console.warn('[Trascrizione] Decodifica a 16 kHz non riuscita, provo il ricampionamento manuale', firstErr);
   }
 
   // 2) fallback: decodifica alla frequenza nativa e ricampiona con OfflineAudioContext
@@ -164,6 +172,35 @@ async function decodeTo16kMono(blob: Blob): Promise<Float32Array> {
   } finally {
     ctx.close().catch(() => {});
   }
+}
+
+/** PCM mono 16 bit in un file WAV. */
+function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+  };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    offset += 2;
+  }
+  return new Blob([buffer], { type: 'audio/wav' });
 }
 
 // ---------- Utilità pure (esportate per i test) ----------
@@ -236,33 +273,37 @@ export async function transcribeBlobLocally(
   };
 
   onProgress?.({ stage: 'decoding', percent: 0 });
+
+  // File di dimensione normale: si invia l'audio originale (leggero, qualità massima)
+  if (blob.size <= MAX_DIRECT_BYTES) {
+    const durationSec = await probeDuration(blob);
+    throwIfAborted();
+    onProgress?.({ stage: 'transcribing', percent: 10 });
+    const raw = await uploadForTranscription(blob, durationSec, language, signal);
+    onProgress?.({ stage: 'transcribing', percent: 100 });
+    return { text: cleanWhisperText(raw), durationSec };
+  }
+
+  // File molto lungo: si decodifica e si divide in pezzi WAV da 10 minuti
   let audio: Float32Array;
   try {
     audio = await decodeTo16kMono(blob);
-  } catch (err: any) {
-    throw new Error(
-      'Impossibile leggere questo audio sul dispositivo (formato non supportato o file troppo lungo).'
-    );
+  } catch {
+    throw new Error('Impossibile leggere questo audio sul dispositivo (formato non supportato o file troppo lungo).');
   }
   throwIfAborted();
   const durationSec = audio.length / SAMPLE_RATE;
 
-  onProgress?.({ stage: 'model', percent: 0 });
-  await preloadWhisper((percent) => onProgress?.({ stage: 'model', percent }));
-  throwIfAborted();
-
-  const windows = planWindows(audio);
+  const windows = planWindows(audio, SAMPLE_RATE, LARGE_CHUNK_SECONDS);
   const parts: string[] = [];
-
   for (let i = 0; i < windows.length; i++) {
     throwIfAborted();
     const [s, e] = windows[i];
     if (e - s >= MIN_CHUNK_SECONDS * SAMPLE_RATE) {
-      const slice = audio.slice(s, e); // copia: il buffer viene trasferito al worker
-      if (rms(slice) >= SILENCE_RMS) {
-        const cleaned = cleanWhisperText(await transcribeChunk(slice, language));
-        if (cleaned && cleaned !== parts[parts.length - 1]) parts.push(cleaned);
-      }
+      const wav = encodeWav(audio.subarray(s, e), SAMPLE_RATE);
+      const raw = await uploadForTranscription(wav, (e - s) / SAMPLE_RATE, language, signal);
+      const cleaned = cleanWhisperText(raw);
+      if (cleaned && cleaned !== parts[parts.length - 1]) parts.push(cleaned);
     }
     onProgress?.({ stage: 'transcribing', percent: ((i + 1) / windows.length) * 100 });
   }
