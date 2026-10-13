@@ -706,6 +706,136 @@ Se l'utente ti chiede di formulare una mail di recap, una lista di task o un mes
     });
   }
 });
+var GROQ_TRANSCRIBE_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
+var GROQ_WHISPER_MODEL = process.env.GROQ_WHISPER_MODEL || "whisper-large-v3";
+var GROQ_API_KEY = process.env.GROQ_API_KEY || (/groq\.com/i.test(OLLAMA_BASE_URL) ? process.env.OLLAMA_API_KEY || "" : "");
+var TRANSCRIBE_DAILY_LIMIT_SEC = Number(process.env.TRANSCRIBE_DAILY_LIMIT_SEC) || 60 * 60;
+var TRANSCRIBE_MAX_BYTES = 25 * 1024 * 1024;
+var TRANSCRIBE_TIMEOUT_MS = Number(process.env.TRANSCRIBE_TIMEOUT_MS) || 12e4;
+var transcribeUsage = /* @__PURE__ */ new Map();
+function utcDay() {
+  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+}
+function getTranscribeUsed(uid) {
+  const u = transcribeUsage.get(uid);
+  return u && u.day === utcDay() ? u.seconds : 0;
+}
+function addTranscribeUsed(uid, seconds) {
+  transcribeUsage.set(uid, { day: utcDay(), seconds: getTranscribeUsed(uid) + seconds });
+}
+setInterval(() => {
+  const day = utcDay();
+  for (const [uid, u] of transcribeUsage) if (u.day !== day) transcribeUsage.delete(uid);
+}, 60 * 60 * 1e3).unref();
+var AUDIO_EXTENSIONS = {
+  "audio/webm": "webm",
+  "video/webm": "webm",
+  "audio/ogg": "ogg",
+  "audio/mp4": "m4a",
+  "audio/m4a": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "m4a",
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav"
+};
+app.post(
+  "/api/transcribe-audio",
+  import_express.default.raw({ type: ["audio/*", "video/webm", "application/octet-stream"], limit: TRANSCRIBE_MAX_BYTES }),
+  async (req, res) => {
+    try {
+      if (!GROQ_API_KEY) {
+        console.error("[transcribe-audio] GROQ_API_KEY mancante (e OLLAMA_BASE_URL non punta a Groq).");
+        return res.status(503).json({ success: false, error: "Trascrizione non configurata sul server." });
+      }
+      const audio = req.body;
+      if (!Buffer.isBuffer(audio) || audio.length < 1e3) {
+        return res.status(400).json({ success: false, error: "Audio mancante o troppo breve." });
+      }
+      const uid = req.authUser.uid;
+      const used = getTranscribeUsed(uid);
+      if (used >= TRANSCRIBE_DAILY_LIMIT_SEC) {
+        return res.status(429).json({
+          success: false,
+          error: `Hai raggiunto il limite giornaliero di trascrizione (${Math.round(TRANSCRIBE_DAILY_LIMIT_SEC / 60)} minuti). Riprova domani.`,
+          code: "TRANSCRIBE_DAILY_LIMIT"
+        });
+      }
+      const mime = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+      const ext = AUDIO_EXTENSIONS[mime] || "webm";
+      const declared = Number(req.headers["x-audio-duration"]);
+      const langHeader = String(req.headers["x-audio-language"] || "it").toLowerCase();
+      const language = /^[a-z]{2}$/.test(langHeader) ? langHeader : "it";
+      const form = new FormData();
+      form.append("file", new Blob([audio], { type: mime || "audio/webm" }), `registrazione.${ext}`);
+      form.append("model", GROQ_WHISPER_MODEL);
+      form.append("language", language);
+      form.append("temperature", "0");
+      form.append("response_format", "verbose_json");
+      if (language === "it") {
+        form.append("prompt", "Trascrizione di una riunione di lavoro in italiano, con punteggiatura corretta.");
+      }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TRANSCRIBE_TIMEOUT_MS);
+      let groqRes;
+      try {
+        groqRes = await fetch(GROQ_TRANSCRIBE_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+          body: form,
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!groqRes.ok) {
+        const body = await groqRes.text();
+        console.error(`[transcribe-audio] Groq HTTP ${groqRes.status}: ${body.slice(0, 300)}`);
+        if (groqRes.status === 429) {
+          return res.status(503).json({
+            success: false,
+            error: "Il servizio di trascrizione \xE8 molto richiesto in questo momento. Riprova tra qualche minuto.",
+            code: "TRANSCRIBE_BUSY"
+          });
+        }
+        if (groqRes.status === 400 || groqRes.status === 413) {
+          return res.status(422).json({ success: false, error: "Audio non valido o troppo grande per la trascrizione." });
+        }
+        if (groqRes.status === 401 || groqRes.status === 403) {
+          return res.status(503).json({ success: false, error: "Trascrizione non configurata correttamente sul server." });
+        }
+        return res.status(502).json({ success: false, error: "Errore dal servizio di trascrizione. Riprova." });
+      }
+      const data = await groqRes.json();
+      const text = typeof data?.text === "string" ? data.text.trim() : "";
+      const realDuration = Number(data?.duration);
+      const charged = Math.max(10, Math.ceil(realDuration > 0 ? realDuration : declared > 0 ? declared : 10));
+      addTranscribeUsed(uid, charged);
+      return res.json({
+        success: true,
+        text,
+        durationSec: realDuration > 0 ? realDuration : void 0,
+        remainingSec: Math.max(0, TRANSCRIBE_DAILY_LIMIT_SEC - getTranscribeUsed(uid))
+      });
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        return res.status(504).json({ success: false, error: "La trascrizione ha impiegato troppo tempo. Riprova." });
+      }
+      console.error("[transcribe-audio]", err);
+      return res.status(500).json({ success: false, error: "Errore interno di trascrizione." });
+    }
+  },
+  // Errori del parser del corpo (es. file oltre i 25 MB)
+  (err, _req, res, _next) => {
+    if (err?.type === "entity.too.large") {
+      return res.status(413).json({ success: false, error: "File audio troppo grande (max 25 MB)." });
+    }
+    console.error("[transcribe-audio] body error", err);
+    return res.status(400).json({ success: false, error: "Richiesta audio non valida." });
+  }
+);
 var OTP_TTL_MS = 10 * 60 * 1e3;
 var OTP_MAX_ATTEMPTS = 5;
 var OTP_RESEND_MS = 60 * 1e3;

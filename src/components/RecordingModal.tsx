@@ -665,7 +665,7 @@ export const RecordingModal: React.FC = () => {
                     Registra Riunione con Microfono
                   </h2>
                   <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400 max-w-sm mx-auto font-medium">
-                    Parla o registra l'incontro dal vivo. Gemini AI trascriverà ogni frase, separerà gli interlocutori ed estrarrà impegni per Google Calendar.
+                    Parla o registra l'incontro dal vivo. Trascriverà ogni frase, separerà gli interlocutori ed estrarrà impegni per Google Calendar.
                   </p>
                 </div>
 
