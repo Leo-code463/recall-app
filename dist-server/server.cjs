@@ -752,6 +752,9 @@ app.post(
       }
       const audio = req.body;
       if (!Buffer.isBuffer(audio) || audio.length < 1e3) {
+        console.warn(
+          `[transcribe-audio] corpo non valido: content-type=${req.headers["content-type"] || "?"} ricevuti=${Buffer.isBuffer(audio) ? audio.length + " byte" : typeof audio}`
+        );
         return res.status(400).json({ success: false, error: "Audio mancante o troppo breve." });
       }
       const uid = req.authUser.uid;
@@ -813,6 +816,9 @@ app.post(
       const realDuration = Number(data?.duration);
       const charged = Math.max(10, Math.ceil(realDuration > 0 ? realDuration : declared > 0 ? declared : 10));
       addTranscribeUsed(uid, charged);
+      console.log(
+        `[transcribe-audio] ok uid=${uid.slice(0, 6)} byte=${audio.length} formato=${mime || "?"} durata-dichiarata=${declared > 0 ? declared : "?"}s durata-groq=${realDuration > 0 ? realDuration.toFixed(1) : "?"}s caratteri=${text.length}`
+      );
       return res.json({
         success: true,
         text,
