@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -18,8 +18,11 @@ import {
   Moon,
   Sun,
   LogOut,
+  Camera,
+  Trash2,
 } from 'lucide-react';
 import { AILogo } from './AILogo';
+import { uploadAvatar, removeAvatar } from '../services/avatarService';
 
 export const ProfileView: React.FC = () => {
   const {
@@ -32,9 +35,44 @@ export const ProfileView: React.FC = () => {
     isDarkMode,
     toggleTheme,
     logout,
+    setAvatarUrl,
   } = useApp();
 
   const { language, t } = useLanguage();
+
+  // Immagine profilo
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const currentAvatar = user?.avatarUrl;
+
+  const handleAvatarPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAvatarBusy(true);
+    setAvatarError(null);
+    try {
+      setAvatarUrl(await uploadAvatar(file));
+    } catch (err: any) {
+      setAvatarError(err?.message || (language === 'it' ? 'Caricamento non riuscito.' : 'Upload failed.'));
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    setAvatarBusy(true);
+    setAvatarError(null);
+    try {
+      await removeAvatar();
+      setAvatarUrl(undefined);
+    } catch (err: any) {
+      setAvatarError(err?.message || (language === 'it' ? 'Rimozione non riuscita.' : 'Removal failed.'));
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   const totalMinutes = meetings.reduce((acc, m) => acc + Math.round(m.duration / 60), 0);
   const totalSummaries = meetings.filter((m) => m.summary).length;
@@ -53,16 +91,48 @@ export const ProfileView: React.FC = () => {
 
       {/* User Card */}
       <div className="glass-card rounded-3xl p-6 sm:p-8">
-        <div className="w-20 h-20 rounded-2xl bg-[#6A49D8]/10 text-[#6A49D8] dark:text-[#B29FFF] text-2xl font-bold flex items-center justify-center ring-2 ring-[#6A49D8]/20 overflow-hidden shrink-0">
-          {user?.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              alt={user.name}
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            user?.name?.charAt(0) || 'U'
+        <div className="relative shrink-0 self-center sm:self-start">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarBusy}
+            aria-label={language === 'it' ? 'Cambia immagine profilo' : 'Change profile picture'}
+            className="group relative w-20 h-20 rounded-2xl bg-[#6A49D8]/10 text-[#6A49D8] dark:text-[#B29FFF] text-2xl font-bold flex items-center justify-center ring-2 ring-[#6A49D8]/20 overflow-hidden cursor-pointer"
+          >
+            {currentAvatar ? (
+              <img
+                src={currentAvatar}
+                alt={user?.name}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              user?.name?.charAt(0) || 'U'
+            )}
+            <span className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
+              {avatarBusy ? (
+                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Camera className="w-5 h-5 text-white" />
+              )}
+            </span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarPick}
+          />
+          {currentAvatar && !avatarBusy && (
+            <button
+              type="button"
+              onClick={handleAvatarRemove}
+              aria-label={language === 'it' ? 'Rimuovi immagine profilo' : 'Remove profile picture'}
+              className="absolute -bottom-2 -right-2 p-1.5 rounded-full bg-white dark:bg-neutral-800 border border-white/70 dark:border-white/10 text-rose-500 shadow-xs cursor-pointer"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
           )}
         </div>
 
@@ -95,6 +165,10 @@ export const ProfileView: React.FC = () => {
             <strong className="text-[#16161E] dark:text-white">{t('oauthConnectedLabel')}</strong> (Google
             Calendar + Google Tasks)
           </p>
+
+          {avatarError && (
+            <p className="text-xs font-bold text-rose-600 dark:text-rose-400">{avatarError}</p>
+          )}
         </div>
       </div>
 

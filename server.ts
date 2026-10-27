@@ -1137,6 +1137,7 @@ interface RegisteredUser {
   name: string;
   createdAt: string;
   language?: "it" | "en";
+  avatarUrl?: string; // data URL JPEG ridotto (max ~150 KB)
 }
 
 interface Friendship {
@@ -1162,7 +1163,7 @@ interface InAppNotification {
   id: string;
   userEmail: string;
   message: string;
-  type: "friend_request" | "friend_accepted";
+  type: "friend_request" | "friend_accepted" | "conversation_shared";
   senderEmail: string;
   senderName: string;
   friendshipId?: string;
@@ -1170,11 +1171,24 @@ interface InAppNotification {
   createdAt: string;
 }
 
+interface SharedConversation {
+  id: string;
+  ownerEmail: string;
+  recipientEmail: string;
+  title: string;
+  meetingDate?: string;
+  snapshot: unknown; // copia della conversazione al momento della condivisione
+  createdAt: string;
+  readAt?: string;
+  hiddenByRecipient?: boolean;
+}
+
 interface DB {
   users: Record<string, RegisteredUser>; // email (lowercase) -> RegisteredUser
   friendships: Friendship[];
   invitations?: Invitation[];
   notifications?: InAppNotification[];
+  shares?: SharedConversation[];
 }
 
 const DB_FILE = path.join(process.cwd(), "recall_db.json");
@@ -1186,12 +1200,13 @@ function readDB(): DB {
       const db = JSON.parse(data);
       if (!db.invitations) db.invitations = [];
       if (!db.notifications) db.notifications = [];
+      if (!db.shares) db.shares = [];
       return db;
     }
   } catch (e) {
     console.error("Failed reading database, returning empty database", e);
   }
-  return { users: {}, friendships: [], invitations: [], notifications: [] };
+  return { users: {}, friendships: [], invitations: [], notifications: [], shares: [] };
 }
 
 function writeDB(db: DB) {
@@ -1254,6 +1269,7 @@ app.post("/api/users/sync", (req, res) => {
       name: name || db.users[normEmail]?.name || normEmail.split("@")[0],
       createdAt: db.users[normEmail]?.createdAt || new Date().toISOString(),
       language: language || db.users[normEmail]?.language || "it",
+      avatarUrl: db.users[normEmail]?.avatarUrl,
     };
 
     let linkedFriendship = false;
@@ -1592,8 +1608,8 @@ app.get("/api/friends/list", (req, res) => {
     const normEmail = req.authUser!.email; // si vedono solo i propri amici
     const db = readDB();
 
-    const friends: Array<{ friendshipId: string; email: string; name: string; createdAt: string; creditsEarned: number }> = [];
-    const receivedPending: Array<{ friendshipId: string; email: string; name: string; createdAt: string }> = [];
+    const friends: Array<{ friendshipId: string; email: string; name: string; avatarUrl?: string; createdAt: string; creditsEarned: number }> = [];
+    const receivedPending: Array<{ friendshipId: string; email: string; name: string; avatarUrl?: string; createdAt: string }> = [];
     const sentPending: Array<{ friendshipId: string; email: string; name: string; createdAt: string; registered: boolean }> = [];
 
     db.friendships.forEach((f) => {
@@ -1604,6 +1620,7 @@ app.get("/api/friends/list", (req, res) => {
             friendshipId: f.id,
             email: f.receiverEmail,
             name: friendUser.name,
+            avatarUrl: (friendUser as any).avatarUrl,
             createdAt: f.createdAt,
             creditsEarned: f.creditsEarnedFromFriend,
           });
@@ -1613,6 +1630,7 @@ app.get("/api/friends/list", (req, res) => {
             friendshipId: f.id,
             email: f.senderEmail,
             name: friendUser.name,
+            avatarUrl: (friendUser as any).avatarUrl,
             createdAt: f.createdAt,
             creditsEarned: f.creditsEarnedFromFriend,
           });
@@ -1624,6 +1642,7 @@ app.get("/api/friends/list", (req, res) => {
             friendshipId: f.id,
             email: f.senderEmail,
             name: senderUser.name,
+            avatarUrl: (senderUser as any).avatarUrl,
             createdAt: f.createdAt,
           });
         } else if (f.senderEmail === normEmail) {
@@ -1746,6 +1765,210 @@ app.post("/api/users/update-language", (req, res) => {
       return res.json({ success: true, language: db.users[normEmail].language });
     }
     return res.status(404).json({ success: false, error: "User not found" });
+  } catch (err: any) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+
+// 5. Immagine profilo: salva / rimuovi (data URL JPEG/PNG/WebP già ridimensionato dal client)
+const AVATAR_MAX_CHARS = 200_000; // ~150 KB di immagine in base64
+app.post("/api/users/avatar", (req, res) => {
+  try {
+    const normEmail = req.authUser!.email;
+    const dataUrl = typeof req.body?.avatar === "string" ? req.body.avatar : "";
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) {
+      return res.status(400).json({ success: false, error: "Formato immagine non valido" });
+    }
+    if (dataUrl.length > AVATAR_MAX_CHARS) {
+      return res.status(413).json({ success: false, error: "Immagine troppo pesante" });
+    }
+    const db = readDB();
+    if (!db.users[normEmail]) {
+      return res.status(404).json({ success: false, error: "Utente non trovato" });
+    }
+    db.users[normEmail].avatarUrl = dataUrl;
+    writeDB(db);
+    res.json({ success: true, avatarUrl: dataUrl });
+  } catch (err: any) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+
+app.delete("/api/users/avatar", (req, res) => {
+  try {
+    const normEmail = req.authUser!.email;
+    const db = readDB();
+    if (!db.users[normEmail]) {
+      return res.status(404).json({ success: false, error: "Utente non trovato" });
+    }
+    delete db.users[normEmail].avatarUrl;
+    writeDB(db);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+
+// 6. Condivisione conversazioni con gli amici (solo tra amicizie "accepted")
+const SHARE_MAX_CHARS = 600_000; // limite di sicurezza sulla copia della conversazione
+
+function areFriends(db: DB, a: string, b: string): boolean {
+  return db.friendships.some(
+    (f) =>
+      f.status === "accepted" &&
+      ((f.senderEmail === a && f.receiverEmail === b) || (f.senderEmail === b && f.receiverEmail === a))
+  );
+}
+
+function shareMeta(db: DB, sh: SharedConversation) {
+  const owner = db.users[sh.ownerEmail];
+  const recipient = db.users[sh.recipientEmail];
+  return {
+    id: sh.id,
+    title: sh.title,
+    meetingDate: sh.meetingDate || "",
+    createdAt: sh.createdAt,
+    read: !!sh.readAt,
+    ownerEmail: sh.ownerEmail,
+    ownerName: owner?.name || sh.ownerEmail.split("@")[0],
+    recipientEmail: sh.recipientEmail,
+    recipientName: recipient?.name || sh.recipientEmail.split("@")[0],
+  };
+}
+
+app.post("/api/shares", (req, res) => {
+  try {
+    const owner = req.authUser!.email;
+    const friendEmail = cleanText(req.body?.friendEmail, 254).toLowerCase();
+    const meeting = req.body?.meeting;
+    if (!friendEmail || !meeting || typeof meeting !== "object" || Array.isArray(meeting)) {
+      return res.status(400).json({ success: false, error: "Dati di condivisione non validi" });
+    }
+    if (friendEmail === owner) {
+      return res.status(400).json({ success: false, error: "Non puoi condividere con te stesso" });
+    }
+    if (isRateLimited(`share:${owner}`)) {
+      return res.status(429).json({ success: false, error: "Troppe condivisioni ravvicinate. Riprova tra qualche minuto." });
+    }
+    const db = readDB();
+    if (!areFriends(db, owner, friendEmail)) {
+      return res.status(403).json({ success: false, error: "Puoi condividere solo con i tuoi amici" });
+    }
+    const raw = JSON.stringify(meeting);
+    if (raw.length > SHARE_MAX_CHARS) {
+      return res.status(413).json({ success: false, error: "Conversazione troppo grande da condividere" });
+    }
+    const title = cleanText(meeting.title, 200) || "Conversazione";
+    const meetingDate = cleanText(String(meeting.createdAt || meeting.date || ""), 40);
+    const sh: SharedConversation = {
+      id: `shr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      ownerEmail: owner,
+      recipientEmail: friendEmail,
+      title,
+      meetingDate,
+      snapshot: JSON.parse(raw),
+      createdAt: new Date().toISOString(),
+    };
+    if (!db.shares) db.shares = [];
+    db.shares.push(sh);
+
+    const ownerName = db.users[owner]?.name || owner.split("@")[0];
+    const lang = db.users[friendEmail]?.language || "it";
+    if (!db.notifications) db.notifications = [];
+    db.notifications.push({
+      id: `not_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userEmail: friendEmail,
+      message:
+        lang === "en"
+          ? `"${ownerName}" shared the conversation "${title}" with you`
+          : `"${ownerName}" ha condiviso con te la conversazione "${title}"`,
+      type: "conversation_shared",
+      senderEmail: owner,
+      senderName: ownerName,
+      read: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    writeDB(db);
+    res.json({ success: true, share: shareMeta(db, sh) });
+  } catch (err: any) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+
+app.get("/api/shares/received", (req, res) => {
+  try {
+    const me = req.authUser!.email;
+    const db = readDB();
+    const list = (db.shares || [])
+      .filter((sh) => sh.recipientEmail === me && !sh.hiddenByRecipient)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((sh) => shareMeta(db, sh));
+    res.json({ success: true, shares: list });
+  } catch (err: any) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+
+app.get("/api/shares/sent", (req, res) => {
+  try {
+    const me = req.authUser!.email;
+    const db = readDB();
+    const list = (db.shares || [])
+      .filter((sh) => sh.ownerEmail === me)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((sh) => shareMeta(db, sh));
+    res.json({ success: true, shares: list });
+  } catch (err: any) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+
+app.get("/api/shares/:id", (req, res) => {
+  try {
+    const me = req.authUser!.email;
+    const id = cleanText(req.params.id, 100);
+    const db = readDB();
+    const sh = (db.shares || []).find((x) => x.id === id);
+    const isOwner = !!sh && sh.ownerEmail === me;
+    const isRecipient = !!sh && sh.recipientEmail === me && !sh.hiddenByRecipient;
+    if (!sh || (!isOwner && !isRecipient)) {
+      return res.status(404).json({ success: false, error: "Conversazione non trovata" });
+    }
+    if (isRecipient && !sh.readAt) {
+      sh.readAt = new Date().toISOString();
+      writeDB(db);
+    }
+    res.json({ success: true, share: shareMeta(db, sh), snapshot: sh.snapshot });
+  } catch (err: any) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+
+// Il proprietario revoca (cancella per tutti); il destinatario la toglie solo dalla propria lista
+app.delete("/api/shares/:id", (req, res) => {
+  try {
+    const me = req.authUser!.email;
+    const id = cleanText(req.params.id, 100);
+    const db = readDB();
+    const sh = (db.shares || []).find((x) => x.id === id);
+    if (!sh) return res.status(404).json({ success: false, error: "Conversazione non trovata" });
+    if (sh.ownerEmail === me) {
+      db.shares = (db.shares || []).filter((x) => x.id !== id);
+    } else if (sh.recipientEmail === me) {
+      sh.hiddenByRecipient = true;
+    } else {
+      return res.status(404).json({ success: false, error: "Conversazione non trovata" });
+    }
+    writeDB(db);
+    res.json({ success: true });
   } catch (err: any) {
     console.error("[API error]", err);
     res.status(500).json({ success: false, error: "Errore interno del server" });

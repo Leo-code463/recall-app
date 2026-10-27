@@ -1,0 +1,37 @@
+RECALL - Immagine profilo + Condivisione conversazioni con gli amici
+=====================================================================
+
+COSA CONTIENE (le cartelle rispecchiano il progetto: copia sopra i tuoi file)
+
+  server.ts                                    (MODIFICATO) rotte avatar e condivisioni
+  src/context/AppContext.tsx                   (MODIFICATO) avatar + stato condivisioni
+  src/components/ProfileView.tsx               (MODIFICATO) foto profilo cliccabile
+  src/components/FriendsView.tsx               (MODIFICATO) avatar, "Condividi", sezioni condivise
+  src/components/UserAvatar.tsx                (NUOVO)
+  src/components/ShareConversationModal.tsx    (NUOVO) scelta della conversazione da inviare
+  src/components/SharedConversationViewer.tsx  (NUOVO) lettura della conversazione ricevuta
+  src/services/avatarService.ts                (NUOVO)
+  src/services/shareService.ts                 (NUOVO)
+
+PASSI
+  1. Fai una copia di backup dei tuoi file originali.
+  2. Copia le cartelle di questo zip nella radice del progetto, accettando la sovrascrittura.
+  3. Nel terminale, dalla cartella del progetto:
+        npm run build
+        npx cap sync android
+  4. Riavvia il server (in locale o con un nuovo deploy su Render).
+
+COME SI USA
+  - Foto profilo: Profilo > tocca l'avatar > scegli la foto. Il cestino la rimuove.
+  - Condividere: Amici > "Condividi" accanto all'amico > scegli la conversazione > Condividi.
+  - L'amico la trova in "Condivise con me" (in sola lettura, senza audio).
+  - Chi ha condiviso puo' revocare da "Condivise da me".
+
+NOTE
+  - Si puo' condividere solo con amicizie gia' accettate.
+  - Il pulsante "Condividi" e' nella schermata Amici. Per metterlo anche dentro il dettaglio
+    di una conversazione serve il file di quella schermata.
+  - IMPORTANTE: foto e condivisioni sono salvate in recall_db.json. Sul piano gratuito di Render
+    il disco si azzera a ogni deploy/riavvio: finche' non passi a un database persistente
+    (es. Firestore) questi dati possono andare persi.
+  - In FriendsView ho corretto anche una riga con className troncato ("border ...").

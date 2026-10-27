@@ -119,7 +119,7 @@ export const DashboardView: React.FC = () => {
   const handleTaskSyncClick = (task: any) => {
     const isTask1 = task.id === 'task-1';
     const isTask2 = task.id === 'task-2';
-    
+
     setCalendarPreviewData({
       title: task.title,
       date: new Date().toISOString().split('T')[0],
@@ -156,8 +156,13 @@ export const DashboardView: React.FC = () => {
     },
   ];
 
+  /* Titoli di sezione sticky: si agganciano subito sotto l'header (altezza header = padding di <main> + 44px + 12px).
+     Restano fissi finché la loro sezione è in vista, poi lasciano il posto al titolo successivo. */
+  const SECTION_STICKY =
+    'sticky z-40 -mx-3 sm:mx-0 px-3 sm:px-3 py-3 top-[calc(4.375rem+env(safe-area-inset-top,0px))] sm:top-[calc(5rem+env(safe-area-inset-top,0px))] bg-[#F5F3FD]/80 backdrop-blur-xl dark:bg-[#0F0D18]/75';
+
   return (
-    <div className="ds space-y-7 animate-in fade-in duration-300 max-w-2xl mx-auto pb-16">
+    <div className="ds space-y-8 animate-in fade-in duration-300 max-w-2xl mx-auto pb-16">
       {/* ===== 1. Header sticky =====
           I margini negativi/padding ripetono quelli di <main> (incluso il safe-area della status bar Android):
           l'header parte dal bordo alto e lo sfondo sfocato copre anche la status bar. */}
@@ -184,6 +189,7 @@ export const DashboardView: React.FC = () => {
             }}
             className={`relative w-11 h-11 rounded-full flex items-center justify-center active:scale-95 transition-transform cursor-pointer ${GLASS}`}
             title={t('viewNotificationsAndFriends')}
+            aria-label={t('viewNotificationsAndFriends')}
           >
             <Bell className={`w-5 h-5 ${INK}`} strokeWidth={1.9} />
             {friendsReceivedPending.length > 0 && (
@@ -200,6 +206,7 @@ export const DashboardView: React.FC = () => {
             }}
             className={`w-11 h-11 rounded-full flex items-center justify-center overflow-hidden active:scale-95 transition-transform cursor-pointer ${GLASS}`}
             title={t('viewProfileAndSettings')}
+            aria-label={t('viewProfileAndSettings')}
           >
             {user?.avatarUrl ? (
               <img
@@ -262,19 +269,19 @@ export const DashboardView: React.FC = () => {
       )}
 
       {/* ===== 3. Discussioni recenti ===== */}
-      <section className="space-y-3.5">
-        <div className="flex items-center justify-between">
+      <section>
+        <div className={`${SECTION_STICKY} flex items-center justify-between`}>
           <h2 className={`font-display text-lg font-semibold ${INK}`}>{t('recentDiscussions')}</h2>
           <button
             onClick={() => setActiveTab('search')}
-            className={`text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 ${PRIMARY_TEXT}`}
+            className={`text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 py-1 pl-3 ${PRIMARY_TEXT}`}
           >
             {t('viewAll')}
           </button>
         </div>
 
         {meetings.length > 0 ? (
-          <div className="no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0 flex gap-3.5 overflow-x-auto snap-x snap-mandatory scroll-px-3 pb-3 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0 mt-1 flex gap-3.5 overflow-x-auto snap-x snap-mandatory scroll-px-3 pb-3 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {meetings.map((meet, cardIdx) => {
               const tone = CARD_TONES[cardIdx % CARD_TONES.length];
               return (
@@ -326,7 +333,7 @@ export const DashboardView: React.FC = () => {
             })}
           </div>
         ) : (
-          <div className={`rounded-[28px] px-5 py-8 text-center text-sm ${GLASS} ${MUTED}`}>
+          <div className={`mt-1 rounded-[28px] px-5 py-8 text-center text-sm ${GLASS} ${MUTED}`}>
             {language === 'it'
               ? 'Nessuna discussione registrata. Tocca il microfono per iniziare.'
               : 'No recordings yet. Tap the microphone to start.'}
@@ -335,8 +342,8 @@ export const DashboardView: React.FC = () => {
       </section>
 
       {/* ===== 4. Task di oggi ===== */}
-      <section className="space-y-3.5">
-        <div className="flex items-center justify-between gap-3">
+      <section>
+        <div className={`${SECTION_STICKY} flex items-center justify-between gap-3`}>
           <div className="flex items-baseline gap-2.5 min-w-0">
             <h2 className={`font-display text-lg font-semibold ${INK}`}>{t('todayTasksTitle')}</h2>
             <span className={`inline-flex items-center gap-1 text-[13px] font-medium ${TEAL_TEXT}`}>
@@ -347,7 +354,7 @@ export const DashboardView: React.FC = () => {
 
           <button
             onClick={() => setIsAddingTask(!isAddingTask)}
-            className={`inline-flex items-center gap-1 text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 shrink-0 ${PRIMARY_TEXT}`}
+            className={`inline-flex items-center gap-1 text-sm font-medium cursor-pointer transition-opacity hover:opacity-80 shrink-0 py-1 pl-3 ${PRIMARY_TEXT}`}
           >
             <Plus className="w-4 h-4" strokeWidth={2.2} />
             {t('addTask')}
@@ -358,7 +365,7 @@ export const DashboardView: React.FC = () => {
         {isAddingTask && (
           <form
             onSubmit={handleCreateTask}
-            className={`flex gap-2 p-2.5 rounded-[22px] animate-in slide-in-from-top-2 duration-200 ${GLASS}`}
+            className={`mt-1 mb-3.5 flex gap-2 p-2.5 rounded-[22px] animate-in slide-in-from-top-2 duration-200 ${GLASS}`}
           >
             <input
               type="text"
@@ -375,7 +382,7 @@ export const DashboardView: React.FC = () => {
         )}
 
         {todayTasks.length > 0 ? (
-          <div className={`rounded-[28px] px-4 ${GLASS}`}>
+          <div className={`mt-1 rounded-[28px] px-4 ${GLASS}`}>
             {todayTasks.map((task) => {
               const isTask1 = task.id === 'task-1';
               const isTask2 = task.id === 'task-2';
@@ -388,16 +395,21 @@ export const DashboardView: React.FC = () => {
                   key={task.id}
                   className="flex items-center gap-3.5 py-4 border-b border-[#ECEBF3] dark:border-white/10 last:border-b-0"
                 >
-                  {/* Cerchio di completamento */}
+                  {/* Cerchio di completamento: grandezza visibile invariata, area di tocco allargata */}
                   <button
                     onClick={() => toggleTask(task.id)}
-                    className={`w-6 h-6 rounded-full border-[1.5px] flex items-center justify-center shrink-0 transition-all cursor-pointer ${
-                      task.completed
-                        ? 'bg-[#6A49D8] border-[#6A49D8] text-white dark:bg-[#A088F9] dark:border-[#A088F9] dark:text-[#14101F]'
-                        : 'border-[#D8D8E0] dark:border-white/20 hover:border-[#6A49D8]'
-                    }`}
+                    className="-m-2.5 p-2.5 shrink-0 cursor-pointer"
+                    aria-label={task.title}
                   >
-                    {task.completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                    <span
+                      className={`w-6 h-6 rounded-full border-[1.5px] flex items-center justify-center transition-all ${
+                        task.completed
+                          ? 'bg-[#6A49D8] border-[#6A49D8] text-white dark:bg-[#A088F9] dark:border-[#A088F9] dark:text-[#14101F]'
+                          : 'border-[#D8D8E0] dark:border-white/20'
+                      }`}
+                    >
+                      {task.completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                    </span>
                   </button>
 
                   <div className="min-w-0 flex-1">
@@ -434,7 +446,7 @@ export const DashboardView: React.FC = () => {
             })}
           </div>
         ) : (
-          <div className={`rounded-[28px] px-5 py-8 text-center ${GLASS}`}>
+          <div className={`mt-1 rounded-[28px] px-5 py-8 text-center ${GLASS}`}>
             <Inbox className="w-6 h-6 text-[#B8B6C6] mx-auto mb-2" strokeWidth={1.7} />
             <p className={`text-sm ${MUTED}`}>{t('noTasksToday')}</p>
           </div>

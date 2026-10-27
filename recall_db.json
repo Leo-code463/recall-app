@@ -1,0 +1,22 @@
+{
+  "users": {
+    "leo@alea.pro": {
+      "email": "leo@alea.pro",
+      "name": "Leonardo Fiorot",
+      "createdAt": "2026-10-10T08:04:54.633Z"
+    },
+    "friend@example.com": {
+      "email": "friend@example.com",
+      "name": "Amico Demo",
+      "createdAt": "2026-10-10T08:04:54.635Z"
+    },
+    "marco@alea.pro": {
+      "email": "marco@alea.pro",
+      "name": "Marco Rossini",
+      "createdAt": "2026-10-10T08:04:54.635Z"
+    }
+  },
+  "friendships": [],
+  "invitations": [],
+  "notifications": []
+}

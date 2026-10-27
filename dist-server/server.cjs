@@ -1000,12 +1000,13 @@ function readDB() {
       const db = JSON.parse(data);
       if (!db.invitations) db.invitations = [];
       if (!db.notifications) db.notifications = [];
+      if (!db.shares) db.shares = [];
       return db;
     }
   } catch (e) {
     console.error("Failed reading database, returning empty database", e);
   }
-  return { users: {}, friendships: [], invitations: [], notifications: [] };
+  return { users: {}, friendships: [], invitations: [], notifications: [], shares: [] };
 }
 function writeDB(db) {
   try {
@@ -1052,7 +1053,8 @@ app.post("/api/users/sync", (req, res) => {
       email: normEmail,
       name: name || db.users[normEmail]?.name || normEmail.split("@")[0],
       createdAt: db.users[normEmail]?.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
-      language: language || db.users[normEmail]?.language || "it"
+      language: language || db.users[normEmail]?.language || "it",
+      avatarUrl: db.users[normEmail]?.avatarUrl
     };
     let linkedFriendship = false;
     let inviterName = "";
@@ -1323,6 +1325,7 @@ app.get("/api/friends/list", (req, res) => {
             friendshipId: f.id,
             email: f.receiverEmail,
             name: friendUser.name,
+            avatarUrl: friendUser.avatarUrl,
             createdAt: f.createdAt,
             creditsEarned: f.creditsEarnedFromFriend
           });
@@ -1332,6 +1335,7 @@ app.get("/api/friends/list", (req, res) => {
             friendshipId: f.id,
             email: f.senderEmail,
             name: friendUser.name,
+            avatarUrl: friendUser.avatarUrl,
             createdAt: f.createdAt,
             creditsEarned: f.creditsEarnedFromFriend
           });
@@ -1343,6 +1347,7 @@ app.get("/api/friends/list", (req, res) => {
             friendshipId: f.id,
             email: f.senderEmail,
             name: senderUser.name,
+            avatarUrl: senderUser.avatarUrl,
             createdAt: f.createdAt
           });
         } else if (f.senderEmail === normEmail) {
@@ -1442,6 +1447,184 @@ app.post("/api/users/update-language", (req, res) => {
       return res.json({ success: true, language: db.users[normEmail].language });
     }
     return res.status(404).json({ success: false, error: "User not found" });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+var AVATAR_MAX_CHARS = 2e5;
+app.post("/api/users/avatar", (req, res) => {
+  try {
+    const normEmail = req.authUser.email;
+    const dataUrl = typeof req.body?.avatar === "string" ? req.body.avatar : "";
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) {
+      return res.status(400).json({ success: false, error: "Formato immagine non valido" });
+    }
+    if (dataUrl.length > AVATAR_MAX_CHARS) {
+      return res.status(413).json({ success: false, error: "Immagine troppo pesante" });
+    }
+    const db = readDB();
+    if (!db.users[normEmail]) {
+      return res.status(404).json({ success: false, error: "Utente non trovato" });
+    }
+    db.users[normEmail].avatarUrl = dataUrl;
+    writeDB(db);
+    res.json({ success: true, avatarUrl: dataUrl });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.delete("/api/users/avatar", (req, res) => {
+  try {
+    const normEmail = req.authUser.email;
+    const db = readDB();
+    if (!db.users[normEmail]) {
+      return res.status(404).json({ success: false, error: "Utente non trovato" });
+    }
+    delete db.users[normEmail].avatarUrl;
+    writeDB(db);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+var SHARE_MAX_CHARS = 6e5;
+function areFriends(db, a, b) {
+  return db.friendships.some(
+    (f) => f.status === "accepted" && (f.senderEmail === a && f.receiverEmail === b || f.senderEmail === b && f.receiverEmail === a)
+  );
+}
+function shareMeta(db, sh) {
+  const owner = db.users[sh.ownerEmail];
+  const recipient = db.users[sh.recipientEmail];
+  return {
+    id: sh.id,
+    title: sh.title,
+    meetingDate: sh.meetingDate || "",
+    createdAt: sh.createdAt,
+    read: !!sh.readAt,
+    ownerEmail: sh.ownerEmail,
+    ownerName: owner?.name || sh.ownerEmail.split("@")[0],
+    recipientEmail: sh.recipientEmail,
+    recipientName: recipient?.name || sh.recipientEmail.split("@")[0]
+  };
+}
+app.post("/api/shares", (req, res) => {
+  try {
+    const owner = req.authUser.email;
+    const friendEmail = cleanText(req.body?.friendEmail, 254).toLowerCase();
+    const meeting = req.body?.meeting;
+    if (!friendEmail || !meeting || typeof meeting !== "object" || Array.isArray(meeting)) {
+      return res.status(400).json({ success: false, error: "Dati di condivisione non validi" });
+    }
+    if (friendEmail === owner) {
+      return res.status(400).json({ success: false, error: "Non puoi condividere con te stesso" });
+    }
+    if (isRateLimited(`share:${owner}`)) {
+      return res.status(429).json({ success: false, error: "Troppe condivisioni ravvicinate. Riprova tra qualche minuto." });
+    }
+    const db = readDB();
+    if (!areFriends(db, owner, friendEmail)) {
+      return res.status(403).json({ success: false, error: "Puoi condividere solo con i tuoi amici" });
+    }
+    const raw = JSON.stringify(meeting);
+    if (raw.length > SHARE_MAX_CHARS) {
+      return res.status(413).json({ success: false, error: "Conversazione troppo grande da condividere" });
+    }
+    const title = cleanText(meeting.title, 200) || "Conversazione";
+    const meetingDate = cleanText(String(meeting.createdAt || meeting.date || ""), 40);
+    const sh = {
+      id: `shr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      ownerEmail: owner,
+      recipientEmail: friendEmail,
+      title,
+      meetingDate,
+      snapshot: JSON.parse(raw),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (!db.shares) db.shares = [];
+    db.shares.push(sh);
+    const ownerName = db.users[owner]?.name || owner.split("@")[0];
+    const lang = db.users[friendEmail]?.language || "it";
+    if (!db.notifications) db.notifications = [];
+    db.notifications.push({
+      id: `not_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userEmail: friendEmail,
+      message: lang === "en" ? `"${ownerName}" shared the conversation "${title}" with you` : `"${ownerName}" ha condiviso con te la conversazione "${title}"`,
+      type: "conversation_shared",
+      senderEmail: owner,
+      senderName: ownerName,
+      read: false,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    writeDB(db);
+    res.json({ success: true, share: shareMeta(db, sh) });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.get("/api/shares/received", (req, res) => {
+  try {
+    const me = req.authUser.email;
+    const db = readDB();
+    const list = (db.shares || []).filter((sh) => sh.recipientEmail === me && !sh.hiddenByRecipient).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((sh) => shareMeta(db, sh));
+    res.json({ success: true, shares: list });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.get("/api/shares/sent", (req, res) => {
+  try {
+    const me = req.authUser.email;
+    const db = readDB();
+    const list = (db.shares || []).filter((sh) => sh.ownerEmail === me).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((sh) => shareMeta(db, sh));
+    res.json({ success: true, shares: list });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.get("/api/shares/:id", (req, res) => {
+  try {
+    const me = req.authUser.email;
+    const id = cleanText(req.params.id, 100);
+    const db = readDB();
+    const sh = (db.shares || []).find((x) => x.id === id);
+    const isOwner = !!sh && sh.ownerEmail === me;
+    const isRecipient = !!sh && sh.recipientEmail === me && !sh.hiddenByRecipient;
+    if (!sh || !isOwner && !isRecipient) {
+      return res.status(404).json({ success: false, error: "Conversazione non trovata" });
+    }
+    if (isRecipient && !sh.readAt) {
+      sh.readAt = (/* @__PURE__ */ new Date()).toISOString();
+      writeDB(db);
+    }
+    res.json({ success: true, share: shareMeta(db, sh), snapshot: sh.snapshot });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.delete("/api/shares/:id", (req, res) => {
+  try {
+    const me = req.authUser.email;
+    const id = cleanText(req.params.id, 100);
+    const db = readDB();
+    const sh = (db.shares || []).find((x) => x.id === id);
+    if (!sh) return res.status(404).json({ success: false, error: "Conversazione non trovata" });
+    if (sh.ownerEmail === me) {
+      db.shares = (db.shares || []).filter((x) => x.id !== id);
+    } else if (sh.recipientEmail === me) {
+      sh.hiddenByRecipient = true;
+    } else {
+      return res.status(404).json({ success: false, error: "Conversazione non trovata" });
+    }
+    writeDB(db);
+    res.json({ success: true });
   } catch (err) {
     console.error("[API error]", err);
     res.status(500).json({ success: false, error: "Errore interno del server" });

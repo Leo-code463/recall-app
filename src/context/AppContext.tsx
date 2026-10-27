@@ -19,8 +19,16 @@ import {
   loginEmailAccount,
   refreshEmailVerified,
   friendlyAuthError,
+  auth,
 } from '../services/firebaseAuth';
 import { apiFetch } from '../services/apiClient';
+import {
+  ShareMeta,
+  createShare,
+  listReceivedShares,
+  listSentShares,
+  deleteShare,
+} from '../services/shareService';
 import { requestEmailOtp, verifyEmailOtp, OtpError } from '../services/otpService';
 import { analyzeTasksApi } from '../services/geminiService';
 import { sendWelcomeEmail } from '../services/emailService';
@@ -67,6 +75,16 @@ interface AppContextType {
   fetchFriends: () => Promise<void>;
   sendFriendRequest: (email: string) => Promise<{ success: boolean; error?: string; registered?: boolean; acceptedAutomatic?: boolean }>;
   respondFriendRequest: (friendshipId: string, action: 'accept' | 'reject') => Promise<boolean>;
+
+  // Immagine profilo
+  setAvatarUrl: (url?: string) => void;
+
+  // Conversazioni condivise con gli amici
+  receivedShares: ShareMeta[];
+  sentShares: ShareMeta[];
+  fetchShares: () => Promise<void>;
+  shareMeetingWithFriend: (meeting: Meeting, friendEmail: string) => Promise<{ success: boolean; error?: string }>;
+  removeShare: (shareId: string) => Promise<boolean>;
 
   // Actions
   loginWithEmail: (email: string, pass: string) => Promise<boolean>;
@@ -176,6 +194,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [friendsList, setFriendsList] = useState<any[]>([]);
   const [friendsReceivedPending, setFriendsReceivedPending] = useState<any[]>([]);
   const [friendsSentPending, setFriendsSentPending] = useState<any[]>([]);
+  const [receivedShares, setReceivedShares] = useState<ShareMeta[]>([]);
+  const [sentShares, setSentShares] = useState<ShareMeta[]>([]);
 
   // Meetings: Only genuine user recordings, no fake/demo discussions.
   // Isolated per user account so each user has their own independent discussions.
@@ -336,7 +356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return {
               ...prev,
               googleConnected: workspaceConnected,
-              avatarUrl: firebaseUser.photoURL || prev.avatarUrl,
+              avatarUrl: prev.avatarUrl || firebaseUser.photoURL || undefined,
               isEmailVerified: firebaseUser.emailVerified,
             };
           });
@@ -856,6 +876,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return false;
   };
 
+  // Aggiorna l'immagine profilo nello stato (senza argomento: torna alla foto dell'account Google, se c'è)
+  const setAvatarUrl = (url?: string) => {
+    setUser((prev) => (prev ? { ...prev, avatarUrl: url ?? auth.currentUser?.photoURL ?? undefined } : prev));
+  };
+
+  // Conversazioni condivise: carica elenco ricevute/inviate e avvisa una sola volta per ogni nuova ricevuta
+  const fetchShares = async () => {
+    if (!user?.email) return;
+    try {
+      const [received, sent] = await Promise.all([listReceivedShares(), listSentShares()]);
+      setReceivedShares(received);
+      setSentShares(sent);
+
+      const notifiedRaw = localStorage.getItem('recall_notified_shares');
+      const notified: string[] = notifiedRaw ? JSON.parse(notifiedRaw) : [];
+      const fresh = received.filter((sh) => !sh.read && !notified.includes(sh.id));
+      if (fresh.length > 0) {
+        localStorage.setItem('recall_notified_shares', JSON.stringify([...notified, ...fresh.map((sh) => sh.id)]));
+        triggerSuccess(
+          fresh.length === 1
+            ? `${fresh[0].ownerName} ha condiviso con te "${fresh[0].title}"`
+            : `Hai ${fresh.length} nuove conversazioni condivise`
+        );
+      }
+    } catch (err) {
+      console.warn('Failed to fetch shared conversations', err);
+    }
+  };
+
+  const shareMeetingWithFriend = async (meeting: Meeting, friendEmail: string) => {
+    if (!user?.email) return { success: false, error: 'Devi effettuare l’accesso per condividere' };
+    try {
+      await createShare(friendEmail, meeting);
+      await fetchShares();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Errore di rete' };
+    }
+  };
+
+  const removeShare = async (shareId: string) => {
+    try {
+      await deleteShare(shareId);
+      await fetchShares();
+      return true;
+    } catch (err) {
+      console.warn('Failed to remove share', err);
+      return false;
+    }
+  };
+
   // Capture invitation token from URL on load and validate/save it
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -898,6 +969,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .then((res) => {
           if (res.success) {
             console.log('[Backend Sync] Utente sincronizzato:', res.user);
+            if (res.user?.avatarUrl) {
+              setUser((prev) => (prev ? { ...prev, avatarUrl: res.user.avatarUrl } : prev));
+            }
+            fetchShares();
             if (res.linkedFriendship) {
               sessionStorage.removeItem('inviteToken');
               console.log(`[Backend Sync] Collegata richiesta di amicizia da: ${res.inviterName}`);
@@ -910,6 +985,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Poll friends list every 10 seconds to discover incoming invitations or requests
       const interval = setInterval(() => {
         fetchFriends();
+        fetchShares();
       }, 10000);
 
       return () => clearInterval(interval);
@@ -951,6 +1027,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fetchFriends,
         sendFriendRequest,
         respondFriendRequest,
+        setAvatarUrl,
+        receivedShares,
+        sentShares,
+        fetchShares,
+        shareMeetingWithFriend,
+        removeShare,
         loginWithEmail,
         registerWithEmail,
         loginWithGoogle,
