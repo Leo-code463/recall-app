@@ -2053,3 +2053,25 @@ async function startServer() {
 }
 
 startServer();
+
+// Rotta per la verifica di Google Search Console
+app.get('/google6e883f65db785910.html', (req, res) => {
+  res.send('google-site-verification: google6e883f65db785910.html');
+});
+
+// Rotta per la Privacy Policy (necessaria per Google OAuth)
+app.get('/privacy', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head><title>Privacy Policy - Recall</title></head>
+      <body>
+        <h1>Informativa sulla Privacy - Recall</h1>
+        <p>L'applicazione Recall raccoglie solo i dati base di Google (email, nome, immagine del profilo) per l'autenticazione dell'utente.</p>
+        <p>I dati non vengono condivisi con terze parti.</p>
+        <p>Per informazioni o cancellazione dati: leo@alea.pro</p>
+      </body>
+    </html>
+  `);
+});
+app.use(express.static(__dirname));
