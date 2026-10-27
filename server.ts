@@ -2060,18 +2060,19 @@ app.get('/google6e883f65db785910.html', (req, res) => {
 });
 
 // Rotta per la Privacy Policy (necessaria per Google OAuth)
-app.get('/privacy', (req, res) => {
+app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
-      <head><title>Privacy Policy - Recall</title></head>
+      <head>
+        <meta name="google-site-verification" content="IL_TUO_CODICE_COPIATO_DA_GOOGLE" />
+        <title>Recall App</title>
+      </head>
       <body>
-        <h1>Informativa sulla Privacy - Recall</h1>
-        <p>L'applicazione Recall raccoglie solo i dati base di Google (email, nome, immagine del profilo) per l'autenticazione dell'utente.</p>
-        <p>I dati non vengono condivisi con terze parti.</p>
-        <p>Per informazioni o cancellazione dati: leo@alea.pro</p>
+        <h1>Recall App</h1>
+        <p>Applicazione Recall</p>
+        <a href="/privacy">Informativa sulla Privacy</a>
       </body>
     </html>
   `);
 });
-app.use(express.static(__dirname));
