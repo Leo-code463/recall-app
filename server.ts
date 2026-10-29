@@ -9,6 +9,12 @@ import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import firebaseConfig from "./firebase-applet-config.json";
 
 const app = express();
+
+// --- INSERISCI QUESTO BLOCCO PRIMA DI TUTTO IL RESTO ---
+app.get(['/privacy', '/privacy/'], (req, res) => {
+  res.sendFile(process.cwd() + '/public/privacy/index.html');
+});
+// --------------------------------------------------------
 // Dietro il proxy di Render serve per leggere l'IP reale del client (limiti per IP)
 app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
