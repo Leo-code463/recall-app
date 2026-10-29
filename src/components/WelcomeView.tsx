@@ -249,6 +249,23 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onStart }) => {
               />
             ))}
           </div>
+
+          {/* Link legali (richiesti da Google per la verifica OAuth) */}
+          <div className="mt-8 flex items-center justify-center gap-4 text-[11px] font-semibold text-gray-400 dark:text-neutral-500">
+            <a
+              href="/privacy/"
+              className="underline underline-offset-2 hover:text-[#6A49D8] dark:hover:text-[#A088F9] transition-colors"
+            >
+              Privacy Policy
+            </a>
+            <span>•</span>
+            <a
+              href="mailto:leo@alea.pro"
+              className="underline underline-offset-2 hover:text-[#6A49D8] dark:hover:text-[#A088F9] transition-colors"
+            >
+              Contatti
+            </a>
+          </div>
         </div>
       </footer>
     </div>

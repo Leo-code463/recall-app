@@ -2059,19 +2059,49 @@ app.get('/google6e883f65db785910.html', (req, res) => {
   res.send('google-site-verification: google6e883f65db785910.html');
 });
 
-// Rotta per la Privacy Policy (necessaria per Google OAuth)
-app.get('/', (req, res) => {
+// Porivacy Policy
+
+app.get('/privacy', (req, res) => {
   res.send(`
     <!DOCTYPE html>
-    <html>
+    <html lang="it">
       <head>
-        <meta name="google-site-verification" content="IL_TUO_CODICE_COPIATO_DA_GOOGLE" />
-        <title>Recall App</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Informativa sulla Privacy - Recall</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #333; }
+          h1, h2 { color: #1a73e8; }
+          ul { margin-bottom: 20px; }
+        </style>
       </head>
       <body>
-        <h1>Recall App</h1>
-        <p>Applicazione Recall</p>
-        <a href="/privacy">Informativa sulla Privacy</a>
+        <h1>Informativa sulla Privacy di Recall</h1>
+        <p><strong>Ultimo aggiornamento:</strong> ottobre 2026</p>
+        
+        <h2>1. Introduzione</h2>
+        <p>L'applicazione <strong>Recall</strong> si impegna a proteggere la privacy dei propri utenti. Questa informativa descrive come raccogliamo, utilizziamo e proteggiamo le tue informazioni personali quando utilizzi i nostri servizi e l'autenticazione tramite Google.</p>
+
+        <h2>2. Dati Raccolti e Utilizzo</h2>
+        <p>Quando ti autentichi tramite Google OAuth, raccogliamo esclusivamente i seguenti dati del profilo base:</p>
+        <ul>
+          <li>Indirizzo email</li>
+          <li>Nome e cognome</li>
+          <li>Immagine del profilo</li>
+        </ul>
+        <p>Questi dati vengono utilizzati esclusivamente per identificare l'utente, consentire l'accesso all'applicazione e personalizzare l'esperienza d'uso all'interno di Recall.</p>
+
+        <h2>3. Condivisione dei Dati e Terze Parti</h2>
+        <p>Non vendiamo, scambiamo né trasferiamo a terzi le informazioni personali identificabili degli utenti. I tuoi dati non vengono condivisi con alcuna organizzazione o servizio esterno.</p>
+
+        <h2>4. Conformità alle Norme sui Dati Utente di Google</h2>
+        <p>L'uso e il trasferimento ad qualsiasi altra app delle informazioni ricevute dalle API di Google da parte di Recall saranno conformi alle norme sui dati utente dei servizi API di Google, inclusi i requisiti di utilizzo limitato (Limited Use requirements).</p>
+
+        <h2>5. Conservazione e Cancellazione dei Dati</h2>
+        <p>I dati dell'account restano memorizzati finché l'utente utilizza il servizio. Gli utenti possono richiedere la cancellazione completa dei propri dati in qualsiasi momento inviando una comunicazione al nostro supporto.</p>
+
+        <h2>6. Contatti e Supporto</h2>
+        <p>Per qualsiasi domanda relativa a questa privacy policy o per richiedere la cancellazione dei dati, contatta il responsabile alla mail: <strong>leo@alea.pro</strong></p>
       </body>
     </html>
   `);
