@@ -15,6 +15,22 @@ import {
 } from 'lucide-react';
 import { AILogo } from './AILogo';
 
+/** Calcola il saluto dinamico in base all'orario esatto del dispositivo */
+const getGreeting = (lang: string): string => {
+  const hour = new Date().getHours();
+  const isIt = lang === 'it';
+
+  if (hour >= 5 && hour < 12) {
+    return isIt ? 'Buongiorno' : 'Good morning';
+  } else if (hour >= 12 && hour < 18) {
+    return isIt ? 'Buon pomeriggio' : 'Good afternoon';
+  } else if (hour >= 18 && hour < 22) {
+    return isIt ? 'Buonasera' : 'Good evening';
+  } else {
+    return isIt ? 'Buonanotte' : 'Good night';
+  }
+};
+
 export const DashboardView: React.FC = () => {
   const {
     user,
@@ -43,6 +59,19 @@ export const DashboardView: React.FC = () => {
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  
+  // Saluto dinamico sincronizzato con l'orologio
+  const [greetingText, setGreetingText] = useState(() => getGreeting(language));
+
+  // Aggiorna il saluto quando cambia orario o lingua
+  useEffect(() => {
+    setGreetingText(getGreeting(language));
+    const interval = setInterval(() => {
+      setGreetingText(getGreeting(language));
+    }, 60000); // controlla ogni minuto
+
+    return () => clearInterval(interval);
+  }, [language]);
 
   // Lo sfondo sfocato dell'header compare solo quando la pagina scorre
   useEffect(() => {
@@ -129,13 +158,12 @@ export const DashboardView: React.FC = () => {
         ? `Sincronizzazione automatica per l'attività: "${task.title}".\nIdentificato da Recall AI come impegno da programmare.`
         : `Automatic synchronization for task: "${task.title}".\nIdentified by Recall AI as a commitment to schedule.`,
       onSave: async (savedEvent: any) => {
-        // Toggle the task to completed to show it has been processed
         await toggleTask(task.id);
       }
     });
   };
 
-  /* ---------- Stile "Glassmorphism" (palette ricavata dal video di riferimento) ---------- */
+  /* ---------- Stile "Glassmorphism" ---------- */
   const GLASS =
     'bg-white/75 backdrop-blur-xl border border-white/70 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:bg-white/[0.06] dark:border-white/10 dark:shadow-none';
   const INK = 'text-[#16161E] dark:text-white';
@@ -144,7 +172,7 @@ export const DashboardView: React.FC = () => {
   const BTN_PRIMARY =
     'inline-flex items-center justify-center gap-1.5 rounded-full bg-[#6A49D8] text-white font-semibold shadow-[0_6px_18px_-6px_rgba(106,73,216,0.55)] transition-all hover:bg-[#5B3CC4] active:scale-95 cursor-pointer dark:bg-[#A088F9] dark:text-[#14101F] dark:hover:bg-[#B29FFF] dark:shadow-none';
   const TEAL_TEXT = 'text-[#0EBFA2] dark:text-[#5DE6CF]';
-  // Colori delle card "Discussioni recenti": alternano viola e verde acqua come nel video
+  
   const CARD_TONES = [
     {
       iconBox: 'bg-[#E4DAF7] text-[#6A49D8] dark:bg-white/10 dark:text-[#B29FFF]',
@@ -156,23 +184,20 @@ export const DashboardView: React.FC = () => {
     },
   ];
 
-  /* Titoli di sezione sticky: si agganciano subito sotto l'header (altezza header = padding di <main> + 44px + 12px).
-     Restano fissi finché la loro sezione è in vista, poi lasciano il posto al titolo successivo. */
   const SECTION_STICKY =
     'sticky z-40 -mx-3 sm:mx-0 px-3 sm:px-3 py-3 top-[calc(4.375rem+env(safe-area-inset-top,0px))] sm:top-[calc(5rem+env(safe-area-inset-top,0px))] bg-[#F5F3FD]/80 backdrop-blur-xl dark:bg-[#0F0D18]/75';
 
   return (
     <div className="ds space-y-8 animate-in fade-in duration-300 max-w-2xl mx-auto pb-16">
-      {/* ===== 1. Header sticky =====
-          I margini negativi/padding ripetono quelli di <main> (incluso il safe-area della status bar Android):
-          l'header parte dal bordo alto e lo sfondo sfocato copre anche la status bar. */}
+      {/* ===== 1. Header sticky ===== */}
       <div
         className={`sticky top-0 z-50 -mx-3 sm:mx-0 px-3 sm:px-0 -mt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:-mt-[calc(1.5rem+env(safe-area-inset-top,0px))] pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-3 flex items-center justify-between gap-3 transition-all duration-200 ${
           scrolled ? 'bg-[#F5F3FD]/75 backdrop-blur-xl dark:bg-[#0F0D18]/70' : 'bg-transparent'
         }`}
       >
         <div className="min-w-0">
-          <p className={`text-[15px] leading-5 ${MUTED}`}>{t('goodMorning')}</p>
+          {/* Saluto orario dinamico */}
+          <p className={`text-[15px] leading-5 ${MUTED}`}>{greetingText}</p>
           <h1 className={`font-display text-[26px] font-semibold leading-8 tracking-tight truncate ${INK}`}>
             {user?.name || 'Leonardo Fiorot'}
           </h1>
@@ -395,7 +420,6 @@ export const DashboardView: React.FC = () => {
                   key={task.id}
                   className="flex items-center gap-3.5 py-4 border-b border-[#ECEBF3] dark:border-white/10 last:border-b-0"
                 >
-                  {/* Cerchio di completamento: grandezza visibile invariata, area di tocco allargata */}
                   <button
                     onClick={() => toggleTask(task.id)}
                     className="-m-2.5 p-2.5 shrink-0 cursor-pointer"
