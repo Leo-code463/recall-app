@@ -2054,16 +2054,8 @@ async function startServer() {
 
 startServer();
 
-// Assicurati che in cima al file ci sia questo require:
-const path = require('path');
-
-// Forza Express a servire la Privacy Policy prima che intervenga React
-app.get('/privacy', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'privacy', 'index.html'));
-});
-
-app.get('/privacy/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'privacy', 'index.html'));
+app.get(['/privacy', '/privacy/'], (req, res) => {
+  res.sendFile(process.cwd() + '/public/privacy/index.html');
 });
 
 // Rotta per la verifica di Google Search Console
