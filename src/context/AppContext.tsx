@@ -8,7 +8,6 @@ import {
   NavTab,
   TaskAiMeetingDetection,
 } from '../types';
-import { INITIAL_MEETINGS, UPCOMING_GOOGLE_EVENTS, INITIAL_TASKS } from '../data/initialData';
 import { GoogleWorkspaceService } from '../services/calendarService';
 import {
   initAuth,
@@ -29,15 +28,14 @@ import {
   listSentShares,
   deleteShare,
 } from '../services/shareService';
-import { requestEmailOtp, verifyEmailOtp, OtpError } from '../services/otpService';
 import { analyzeTasksApi } from '../services/geminiService';
-import { sendWelcomeEmail } from '../services/emailService';
+import { sendVerificationEmailFirebase, sendWelcomeEmail } from '../services/emailService';
 import confetti from 'canvas-confetti';
 
 export interface OtpStatus {
   error: string | null;
   resendAfterSeconds: number;
-  stamp: number; // cambia a ogni invio, così il modal sa quando ripartire
+  stamp: number;
 }
 
 interface AppContextType {
@@ -64,7 +62,6 @@ interface AppContextType {
   setIsOtpModalOpen: (open: boolean) => void;
   pendingOtpEmail: string;
 
-  // Friendships state
   isAddFriendModalOpen: boolean;
   setIsAddFriendModalOpen: (open: boolean) => void;
   showFriendsSetting: boolean;
@@ -76,21 +73,19 @@ interface AppContextType {
   sendFriendRequest: (email: string) => Promise<{ success: boolean; error?: string; registered?: boolean; acceptedAutomatic?: boolean }>;
   respondFriendRequest: (friendshipId: string, action: 'accept' | 'reject') => Promise<boolean>;
 
-  // Immagine profilo
   setAvatarUrl: (url?: string) => void;
 
-  // Conversazioni condivise con gli amici
   receivedShares: ShareMeta[];
   sentShares: ShareMeta[];
   fetchShares: () => Promise<void>;
   shareMeetingWithFriend: (meeting: Meeting, friendEmail: string) => Promise<{ success: boolean; error?: string }>;
   removeShare: (shareId: string) => Promise<boolean>;
 
-  // Actions
   loginWithEmail: (email: string, pass: string) => Promise<boolean>;
   registerWithEmail: (name: string, email: string, pass: string) => Promise<void>;
   loginWithGoogle: () => Promise<boolean>;
-  verifyEmailCode: (code: string) => Promise<void>;
+  verifyEmailCode: () => Promise<void>;
+  sendEmailCode: (name?: string) => Promise<void>;
   resendVerificationEmail: () => Promise<void>;
   otpStatus: OtpStatus;
   logout: () => void;
@@ -120,17 +115,27 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_KEY_USER = 'recall_user_profile';
-const STORAGE_KEY_MEETINGS = 'recall_meetings_data_v2';
-const STORAGE_KEY_THEME = 'recall_theme_mode';
+// Funzione di recupero sicura che legge sia la nuova chiave 'recap_' che la vecchia 'recall_'
+function loadSavedMeetings(email?: string): Meeting[] {
+  try {
+    const recapKey = email ? `recap_meetings_data_v2_email_${email}` : `recap_meetings_data_v2_guest`;
+    const recallKey = email ? `recall_meetings_data_v2_email_${email}` : `recall_meetings_data_v2_guest`;
+
+    const raw = localStorage.getItem(recapKey) || localStorage.getItem(recallKey) || localStorage.getItem('recall_meetings_data_v2');
+    if (raw) {
+      const parsed: Meeting[] = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.warn('Errore durante il caricamento delle riunioni salvate:', e);
+  }
+  return [];
+}
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Theme Management (Light / Dark)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_THEME);
-      if (saved) return saved === 'dark';
-      return false; // Default to clean, modern light theme
+      return localStorage.getItem('recap_theme_mode') === 'dark' || localStorage.getItem('recall_theme_mode') === 'dark';
     } catch {
       return false;
     }
@@ -140,28 +145,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const root = document.documentElement;
     if (isDarkMode) {
       root.classList.add('dark');
-      localStorage.setItem(STORAGE_KEY_THEME, 'dark');
+      localStorage.setItem('recap_theme_mode', 'dark');
     } else {
       root.classList.remove('dark');
-      localStorage.setItem(STORAGE_KEY_THEME, 'light');
+      localStorage.setItem('recap_theme_mode', 'light');
     }
   }, [isDarkMode]);
 
-  const toggleTheme = () => {
-    setIsDarkMode((prev) => !prev);
-  };
+  const toggleTheme = () => setIsDarkMode((prev) => !prev);
 
-  // User State - starts as null so Login/Registration is the first screen
   const [user, setUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_USER);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.email) return parsed;
-      } catch (e) {
-        console.warn('Failed parsing saved user', e);
-      }
-    }
+    try {
+      const saved = localStorage.getItem('recap_user_profile') || localStorage.getItem('recall_user_profile');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
     return null;
   });
 
@@ -169,26 +166,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (user) {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+      localStorage.setItem('recap_user_profile', JSON.stringify(user));
     } else {
-      localStorage.removeItem(STORAGE_KEY_USER);
+      localStorage.removeItem('recap_user_profile');
     }
   }, [user]);
 
-  // Navigation & Modals
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [activeMeetingId, setActiveMeetingId] = useState<string | null>(null);
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState<boolean>(false);
-  
-  // Email verification flow (link inviato da Firebase)
+
   const [isOtpModalOpen, setIsOtpModalOpen] = useState<boolean>(false);
   const [pendingOtpEmail, setPendingOtpEmail] = useState<string>('');
-  // Esito dell'ultimo invio del codice: il modal lo usa per mostrare errori e far ripartire il conto alla rovescia
   const [otpStatus, setOtpStatus] = useState<OtpStatus>({ error: null, resendAfterSeconds: 60, stamp: 0 });
 
-  // Friendships state
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState<boolean>(false);
   const [showFriendsSetting, setShowFriendsSetting] = useState<boolean>(false);
   const [friendsList, setFriendsList] = useState<any[]>([]);
@@ -197,92 +190,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [receivedShares, setReceivedShares] = useState<ShareMeta[]>([]);
   const [sentShares, setSentShares] = useState<ShareMeta[]>([]);
 
-  // Meetings: Only genuine user recordings, no fake/demo discussions.
-  // Isolated per user account so each user has their own independent discussions.
-  const [meetings, setMeetings] = useState<Meeting[]>(() => {
-    let restoredEmail: string | undefined;
-    try {
-      const savedUser = localStorage.getItem(STORAGE_KEY_USER);
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        if (parsed && parsed.email) restoredEmail = parsed.email;
-      }
-    } catch (e) {}
+  // Caricamento riunioni con salvataggio retrocompatibile
+  const [meetings, setMeetings] = useState<Meeting[]>(() => loadSavedMeetings(user?.email));
 
-    const key = restoredEmail ? `${STORAGE_KEY_MEETINGS}_email_${restoredEmail}` : `${STORAGE_KEY_MEETINGS}_guest`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        const parsed: Meeting[] = JSON.parse(saved);
-        // Filter out any older mock/demo records with template titles
-        return parsed.filter(
-          (m) =>
-            !['meet_1', 'meet_2', 'meet_3'].includes(m.id) &&
-            !m.title.includes('Demo Prodotto Q3') &&
-            !m.title.includes('Allineamento Strategico')
-        );
-      } catch (e) {
-        console.warn('Failed parsing meetings', e);
-      }
-    }
-    return INITIAL_MEETINGS;
-  });
-
-  // Load meetings when user changes (account switch)
   useEffect(() => {
-    const key = user?.email ? `${STORAGE_KEY_MEETINGS}_email_${user.email}` : `${STORAGE_KEY_MEETINGS}_guest`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        const parsed: Meeting[] = JSON.parse(saved);
-        setMeetings(
-          parsed.filter(
-            (m) =>
-              !['meet_1', 'meet_2', 'meet_3'].includes(m.id) &&
-              !m.title.includes('Demo Prodotto Q3') &&
-              !m.title.includes('Allineamento Strategico')
-          )
-        );
-      } catch (e) {
-        console.warn('Failed parsing meetings on user change', e);
-        setMeetings(INITIAL_MEETINGS);
-      }
-    } else {
-      setMeetings(INITIAL_MEETINGS);
+    if (user?.email) {
+      setMeetings(loadSavedMeetings(user.email));
     }
   }, [user?.email]);
 
-  // Save meetings when meetings change, using the specific account key
   useEffect(() => {
-    const key = user?.email ? `${STORAGE_KEY_MEETINGS}_email_${user.email}` : `${STORAGE_KEY_MEETINGS}_guest`;
+    const key = user?.email ? `recap_meetings_data_v2_email_${user.email}` : `recap_meetings_data_v2_guest`;
     localStorage.setItem(key, JSON.stringify(meetings));
   }, [meetings, user?.email]);
 
-  // Google Workspace: Real Calendar Events & Tasks
-  const [upcomingEvents, setUpcomingEvents] = useState<GoogleCalendarEvent[]>(() =>
-    GoogleWorkspaceService.getEvents(UPCOMING_GOOGLE_EVENTS)
-  );
+  const [upcomingEvents, setUpcomingEvents] = useState<GoogleCalendarEvent[]>([]);
+  const [todayTasks, setTodayTasks] = useState<GoogleTaskItem[]>([]);
 
-  const [todayTasks, setTodayTasks] = useState<GoogleTaskItem[]>(() =>
-    GoogleWorkspaceService.getTasks(INITIAL_TASKS)
-  );
-
-  // Sync GoogleWorkspaceService email and reload events/tasks when account changes
   useEffect(() => {
     const email = user?.email || null;
     GoogleWorkspaceService.setUserEmail(email);
-    
-    // Reload local cache for events and tasks of this account
-    setUpcomingEvents(GoogleWorkspaceService.getEvents(UPCOMING_GOOGLE_EVENTS));
-    setTodayTasks(GoogleWorkspaceService.getTasks(INITIAL_TASKS));
-  }, [user?.email]);
 
-  // AI Task Inspection State
+    if (user?.googleConnected) {
+      setUpcomingEvents(GoogleWorkspaceService.getEvents([]));
+      setTodayTasks(GoogleWorkspaceService.getTasks([]));
+    } else {
+      setUpcomingEvents([]);
+      setTodayTasks([]);
+    }
+  }, [user?.email, user?.googleConnected]);
+
   const [taskAiDetections, setTaskAiDetections] = useState<TaskAiMeetingDetection[]>([]);
   const [isAnalyzingTasks, setIsAnalyzingTasks] = useState<boolean>(false);
   const [taskAiError, setTaskAiError] = useState<string | null>(null);
 
-  // Success Badge Animation State
   const [successAnimation, setSuccessAnimation] = useState<{ isVisible: boolean; message: string }>({
     isVisible: false,
     message: '',
@@ -292,21 +233,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [googleError, setGoogleError] = useState<string | null>(null);
 
   const triggerSuccess = (message: string = 'Operazione completata!') => {
-    const msgLower = message.toLowerCase();
-    const isGoogleConnected = msgLower.includes('google') || msgLower.includes('workspace collegato');
-    const isSaved = msgLower.includes('registrazione salvata') || msgLower.includes('salvata con successo');
-
-    if (isGoogleConnected || isSaved) {
-      setSuccessAnimation({ isVisible: true, message });
-      setTimeout(() => {
-        setSuccessAnimation((prev) => ({ ...prev, isVisible: false }));
-      }, 2000);
-    } else {
-      console.log('Success badge suppressed for:', message);
-    }
+    setSuccessAnimation({ isVisible: true, message });
+    setTimeout(() => {
+      setSuccessAnimation((prev) => ({ ...prev, isVisible: false }));
+    }, 2000);
   };
 
-  // Sync Google Workspace data (Calendar & Tasks)
   const syncWorkspaceData = async (token?: string) => {
     const activeToken = token || GoogleWorkspaceService.getAccessToken();
     if (!activeToken) return;
@@ -317,18 +249,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         GoogleWorkspaceService.fetchGoogleTasks(activeToken),
       ]);
 
-      if (events) {
-        setUpcomingEvents(events);
-      }
-      if (tasks) {
-        setTodayTasks(tasks);
-      }
+      if (events) setUpcomingEvents(events);
+      if (tasks) setTodayTasks(tasks);
     } catch (err) {
       console.warn('Error during workspace data synchronization:', err);
     }
   };
 
-  // Initialize Firebase Auth listener on mount
   useEffect(() => {
     const unsubscribe = initAuth(
       async (firebaseUser, token) => {
@@ -361,16 +288,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
           });
 
-          // Sync live events & tasks
           if (token) {
             await syncWorkspaceData(token);
           }
         }
       },
       () => {
-        // Nessuna sessione Firebase valida: un eventuale profilo salvato in locale (vecchio login "finto")
-        // non può chiamare il backend, quindi si riparte dalla schermata di accesso.
-        setUser((prev) => (prev ? null : prev));
+        setUser(null);
       }
     );
 
@@ -379,9 +303,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshCalendarEvents = async () => {
     const token = GoogleWorkspaceService.getAccessToken();
-    if (token) {
-      await syncWorkspaceData(token);
-    }
+    if (token) await syncWorkspaceData(token);
   };
 
   const deleteCalendarEvent = async (eventId: string) => {
@@ -391,7 +313,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     triggerSuccess('Evento rimosso!');
   };
 
-  // Run AI analysis on tasks to detect meetings/events
   const analyzeTasksWithAi = async () => {
     setIsAnalyzingTasks(true);
     setTaskAiError(null);
@@ -403,11 +324,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           notes: t.notes,
           dueDate: t.dueDate,
         }))
-      : [
-          { id: 'mock-1', title: 'Incontro strategico con Leo alle 14:30', notes: 'Allineamento sui nuovi banner', dueDate: new Date().toISOString() },
-          { id: 'mock-2', title: 'Call di allineamento marketing', notes: 'Pianificazione Q4', dueDate: new Date().toISOString() },
-          { id: 'mock-3', title: 'Comprare caffè per ufficio', notes: '', dueDate: new Date().toISOString() }
-        ];
+      : [];
+
+    if (tasksToAnalyze.length === 0) {
+      setTaskAiError('Nessuna task presente da analizzare. Aggiungine una prima di avviare la scansione.');
+      setIsAnalyzingTasks(false);
+      return;
+    }
 
     try {
       const analyses = await analyzeTasksApi({
@@ -415,15 +338,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         referenceDate: new Date().toISOString().split('T')[0],
       });
 
-      // Filter only tasks detected as meetings/events
       const detected = analyses.filter((a) => a.isMeetingOrEvent);
       setTaskAiDetections(detected);
       triggerSuccess('Scansione IA completata!');
-
       if (detected.length > 0) {
-        try {
-          confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-        } catch (e) {}
+        try { confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } }); } catch (e) {}
       }
     } catch (err: any) {
       console.error('Task AI analysis error:', err);
@@ -433,7 +352,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Convert a detected task into a scheduled Google Calendar event
   const convertTaskToCalendarEvent = async (detection: TaskAiMeetingDetection) => {
     if (!detection.suggestedEvent) return;
 
@@ -448,38 +366,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         end: endIso,
         location,
         attendees,
-        description: `${description || ''}\n(Generato automaticamente da AI Recall dal task: "${detection.taskTitle}")`,
+        description: `${description || ''}\n(Generato automaticamente da Recap dal task: "${detection.taskTitle}")`,
       },
       upcomingEvents
     );
 
     setUpcomingEvents(result.updatedList);
-
-    // Mark detection as scheduled in state
     setTaskAiDetections((prev) =>
       prev.map((d) => (d.taskId === detection.taskId ? { ...d, isScheduled: true } : d))
     );
-
-    // Also update the task notes with confirmation
-    setTodayTasks((prev) =>
-      prev.map((t) =>
-        t.id === detection.taskId
-          ? {
-              ...t,
-              notes: `${t.notes ? t.notes + '\n' : ''}Inserito su Google Calendar: ${date} ${startTime}-${endTime}`,
-            }
-          : t
-      )
-    );
-
     triggerSuccess('Evento aggiunto a Calendar!');
-
-    try {
-      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-    } catch (e) {}
   };
 
-  // Auth Operations
   const emptyUsage = () => ({
     summariesUsed: 0,
     chatsUsed: 0,
@@ -510,14 +408,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUser(loggedUser);
 
     if (!fbUser.emailVerified) {
-      // Account esistente ma email non ancora confermata: si resta fuori finché non la conferma
       setPendingOtpEmail(loggedUser.email);
       setIsOtpModalOpen(true);
-      sendEmailCode(loggedUser.name).catch(() => {});
+      sendEmailCode().catch(() => {});
       return false;
     }
 
-    triggerSuccess('Accesso effettuato! Benvenuto su Recall.');
+    triggerSuccess('Accesso effettuato! Benvenuto su Recap.');
     return true;
   };
 
@@ -542,28 +439,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUser(newUser);
     setPendingOtpEmail(newUser.email);
     setIsOtpModalOpen(true);
-    sendEmailCode(newUser.name).catch(() => {});
   };
 
-  // Chiede al server di inviare il codice e ne memorizza l'esito (anche l'errore) per il modal
-  const sendEmailCode = async (name?: string): Promise<void> => {
+  const sendEmailCode = async (_name?: string): Promise<void> => {
     try {
-      const r = await requestEmailOtp(name);
-      setOtpStatus({ error: null, resendAfterSeconds: r.resendAfterSeconds, stamp: Date.now() });
+      await sendVerificationEmailFirebase();
+      setOtpStatus({ error: null, resendAfterSeconds: 60, stamp: Date.now() });
     } catch (err: any) {
-      const wait = err instanceof OtpError && err.retryAfterSeconds ? err.retryAfterSeconds : 0;
-      setOtpStatus({ error: err?.message || 'Invio del codice non riuscito.', resendAfterSeconds: wait, stamp: Date.now() });
-      throw err;
+      const msg = friendlyAuthError(err);
+      setOtpStatus({ error: msg, resendAfterSeconds: 0, stamp: Date.now() });
+      throw new Error(msg);
     }
   };
 
-  // Chiamata dal modal con le 6 cifre: se il server le accetta l'email risulta verificata su Firebase
-  const verifyEmailCode = async (code: string): Promise<void> => {
-    await verifyEmailOtp(code); // lancia un errore con il messaggio da mostrare se il codice è sbagliato
-
-    const verified = await refreshEmailVerified(); // rinnova il token: da ora il server vede email_verified = true
+  const verifyEmailCode = async (): Promise<void> => {
+    const verified = await refreshEmailVerified();
     if (!verified) {
-      throw new Error('Codice accettato, ma l\'account non si è ancora aggiornato. Riprova tra qualche secondo.');
+      throw new Error('Non risulta ancora verificata: clicca prima il link nell\'email.');
     }
 
     if (user) {
@@ -572,11 +464,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.warn('[EmailJS] Welcome email post-verify error:', err)
       );
     }
-    triggerSuccess('Account verificato! Benvenuto su Recall.');
+    triggerSuccess('Account verificato! Benvenuto su Recap.');
     setIsOtpModalOpen(false);
-    try {
-      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-    } catch (e) {}
   };
 
   const resendVerificationEmail = async (): Promise<void> => {
@@ -596,24 +485,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           plan: 'pro',
           googleConnected: true,
           createdAt: new Date().toISOString(),
-          monthlyUsage: {
-            summariesUsed: 0,
-            chatsUsed: 0,
-            minutesRecorded: 0,
-            month: new Date().toISOString().substring(0, 7),
-          },
+          monthlyUsage: emptyUsage(),
         };
         setUser(googleUser);
-
-        // Invia email di benvenuto con EmailJS
-        sendWelcomeEmail(googleUser.email, googleUser.name).catch((err) =>
-          console.warn('[EmailJS] Google login welcome email error:', err)
-        );
         triggerSuccess('Accesso con Google completato! Benvenuto.');
-
-        try {
-          confetti({ particleCount: 60, spread: 60, origin: { y: 0.5 } });
-        } catch (e) {}
         return true;
       }
     } catch (err) {
@@ -625,50 +500,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = async () => {
     await logoutAuth();
+    GoogleWorkspaceService.clearCache();
     setUser(null);
     setActiveMeetingId(null);
     setActiveTab('home');
+    setUpcomingEvents([]);
+    setTodayTasks([]);
   };
 
   const setPlan = (plan: PlanType) => {
     if (!user) return;
     setUser({ ...user, plan });
-    if (plan === 'pro') {
-      try {
-        confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
-      } catch (e) {}
-    }
   };
 
-  // Meeting Management
   const addMeeting = (newMeeting: Meeting) => {
     setMeetings((prev) => [newMeeting, ...prev]);
-    if (user) {
-      setUser({
-        ...user,
-        monthlyUsage: {
-          ...user.monthlyUsage,
-          minutesRecorded: user.monthlyUsage.minutesRecorded + Math.round(newMeeting.duration / 60),
-          summariesUsed: newMeeting.summary ? user.monthlyUsage.summariesUsed + 1 : user.monthlyUsage.summariesUsed,
-        },
-      });
-    }
   };
 
   const updateMeeting = (updatedMeeting: Meeting) => {
-    setMeetings((prev) =>
-      prev.map((m) => (m.id === updatedMeeting.id ? updatedMeeting : m))
-    );
+    setMeetings((prev) => prev.map((m) => (m.id === updatedMeeting.id ? updatedMeeting : m)));
   };
 
   const deleteMeeting = (id: string) => {
     setMeetings((prev) => prev.filter((m) => m.id !== id));
-    if (activeMeetingId === id) {
-      setActiveMeetingId(null);
-    }
+    if (activeMeetingId === id) setActiveMeetingId(null);
   };
 
-  // Add Detected Calendar Event to Google Calendar (Calendario AI)
   const addDetectedEventToCalendar = async (meetingId: string, eventId: string) => {
     const targetMeeting = meetings.find((m) => m.id === meetingId);
     if (!targetMeeting || !targetMeeting.calendarEventsDetected) return;
@@ -676,7 +533,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetEvent = targetMeeting.calendarEventsDetected.find((e) => e.id === eventId);
     if (!targetEvent || targetEvent.isAddedToCalendar) return;
 
-    // Construct ISO dates
     const startIso = `${targetEvent.date}T${targetEvent.startTime}:00`;
     const endIso = `${targetEvent.date}T${targetEvent.endTime}:00`;
 
@@ -694,20 +550,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     setUpcomingEvents(result.updatedList);
-
-    // Update meeting's detected event status
-    const updatedDetected = targetMeeting.calendarEventsDetected.map((e) =>
-      e.id === eventId ? { ...e, isAddedToCalendar: true } : e
-    );
-    updateMeeting({ ...targetMeeting, calendarEventsDetected: updatedDetected });
     triggerSuccess('Evento aggiunto al calendario!');
-
-    try {
-      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
-    } catch (e) {}
   };
 
-  // Add Action Item to Google Tasks
   const addActionItemToGoogleTasks = async (meetingId: string, actionItemId: string) => {
     const targetMeeting = meetings.find((m) => m.id === meetingId);
     if (!targetMeeting || !targetMeeting.summary) return;
@@ -726,26 +571,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     setTodayTasks(result.updatedList);
-
-    // Update action item in meeting
-    const updatedActionItems = targetMeeting.summary.actionItems.map((a) =>
-      a.id === actionItemId ? { ...a, syncedToGoogleTasks: true } : a
-    );
-    updateMeeting({
-      ...targetMeeting,
-      summary: { ...targetMeeting.summary, actionItems: updatedActionItems },
-    });
     triggerSuccess('Task aggiunta con successo!');
   };
 
   const toggleTask = async (taskId: string) => {
     const updated = await GoogleWorkspaceService.toggleTask(taskId, todayTasks);
     setTodayTasks(updated);
-
-    const task = updated.find((t) => t.id === taskId);
-    if (task && task.completed) {
-      triggerSuccess('Task completata!');
-    }
   };
 
   const addTask = async (title: string, notes?: string, dueDate?: string) => {
@@ -759,34 +590,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const accessToken = await requestGoogleWorkspaceToken();
       if (accessToken) {
-        if (user) {
-          setUser({ ...user, googleConnected: true });
-        }
+        if (user) setUser({ ...user, googleConnected: true });
         await syncWorkspaceData(accessToken);
         triggerSuccess('Google Workspace collegato con successo!');
       }
     } catch (e: any) {
-      console.warn('Connect workspace cancelled or failed:', e);
-      const errMsg = e?.message || 'Errore di connessione a Google Calendar/Tasks. Verifica le autorizzazioni.';
-      setGoogleError(errMsg);
+      setGoogleError('Errore di connessione a Google Calendar/Tasks.');
     }
   };
 
   const disconnectGoogleWorkspace = async () => {
     await logoutAuth();
+    GoogleWorkspaceService.clearCache();
     setGoogleError(null);
-    if (user) {
-      setUser({ ...user, googleConnected: false });
-    }
+    if (user) setUser({ ...user, googleConnected: false });
+    setUpcomingEvents([]);
+    setTodayTasks([]);
   };
 
   const updateUserProfile = (name: string, email: string) => {
     if (!user) return;
-    setUser({
-      ...user,
-      name,
-      email,
-    });
+    setUser({ ...user, name, email });
     triggerSuccess('Profilo aggiornato con successo!');
   };
 
@@ -797,27 +621,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const data = await res.json();
       if (data.success) {
         setFriendsList(data.friends || []);
-        
-        // Notify user about newly received requests exactly once
-        const prevNotifiedRaw = localStorage.getItem('recall_notified_friend_requests');
-        const prevNotified: string[] = prevNotifiedRaw ? JSON.parse(prevNotifiedRaw) : [];
-        let newlyReceived = false;
-        let newSenderName = '';
-
-        const newNotifiedList = [...prevNotified];
-        (data.receivedPending || []).forEach((req: any) => {
-          if (!prevNotified.includes(req.friendshipId)) {
-            newlyReceived = true;
-            newSenderName = req.name || req.email;
-            newNotifiedList.push(req.friendshipId);
-          }
-        });
-
-        if (newlyReceived) {
-          localStorage.setItem('recall_notified_friend_requests', JSON.stringify(newNotifiedList));
-          triggerSuccess(`Richiesta di amicizia ricevuta da ${newSenderName}!`);
-        }
-
         setFriendsReceivedPending(data.receivedPending || []);
         setFriendsSentPending(data.sentPending || []);
       }
@@ -832,22 +635,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const res = await apiFetch('/api/friends/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receiverEmail: receiverEmail,
-        }),
+        body: JSON.stringify({ receiverEmail }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
         await fetchFriends();
-        return {
-          success: true,
-          registered: data.registered,
-          acceptedAutomatic: data.acceptedAutomatic,
-          friendship: data.friendship,
-        };
-      } else {
-        return { success: false, error: data.error || 'Impossibile inviare la richiesta' };
+        return { success: true, registered: data.registered, acceptedAutomatic: data.acceptedAutomatic, friendship: data.friendship };
       }
+      return { success: false, error: data.error || 'Impossibile inviare la richiesta' };
     } catch (err: any) {
       return { success: false, error: err.message || 'Errore di rete' };
     }
@@ -859,10 +654,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const res = await apiFetch('/api/friends/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          friendshipId,
-          action,
-        }),
+        body: JSON.stringify({ friendshipId, action }),
       });
       const data = await res.json();
       if (data.success) {
@@ -870,39 +662,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         triggerSuccess(action === 'accept' ? 'Richiesta accettata!' : 'Richiesta rifiutata');
         return true;
       }
-    } catch (err) {
-      console.warn('Failed to respond to friend request', err);
-    }
+    } catch (err) {}
     return false;
   };
 
-  // Aggiorna l'immagine profilo nello stato (senza argomento: torna alla foto dell'account Google, se c'è)
   const setAvatarUrl = (url?: string) => {
     setUser((prev) => (prev ? { ...prev, avatarUrl: url ?? auth.currentUser?.photoURL ?? undefined } : prev));
   };
 
-  // Conversazioni condivise: carica elenco ricevute/inviate e avvisa una sola volta per ogni nuova ricevuta
   const fetchShares = async () => {
     if (!user?.email) return;
     try {
       const [received, sent] = await Promise.all([listReceivedShares(), listSentShares()]);
       setReceivedShares(received);
       setSentShares(sent);
-
-      const notifiedRaw = localStorage.getItem('recall_notified_shares');
-      const notified: string[] = notifiedRaw ? JSON.parse(notifiedRaw) : [];
-      const fresh = received.filter((sh) => !sh.read && !notified.includes(sh.id));
-      if (fresh.length > 0) {
-        localStorage.setItem('recall_notified_shares', JSON.stringify([...notified, ...fresh.map((sh) => sh.id)]));
-        triggerSuccess(
-          fresh.length === 1
-            ? `${fresh[0].ownerName} ha condiviso con te "${fresh[0].title}"`
-            : `Hai ${fresh.length} nuove conversazioni condivise`
-        );
-      }
-    } catch (err) {
-      console.warn('Failed to fetch shared conversations', err);
-    }
+    } catch (err) {}
   };
 
   const shareMeetingWithFriend = async (meeting: Meeting, friendEmail: string) => {
@@ -922,75 +696,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await fetchShares();
       return true;
     } catch (err) {
-      console.warn('Failed to remove share', err);
       return false;
     }
   };
-
-  // Capture invitation token from URL on load and validate/save it
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('inviteToken');
-    if (token) {
-      sessionStorage.setItem('inviteToken', token);
-      
-      // Clean URL parameters so they don't look ugly
-      const newUrl = window.location.pathname + window.location.hash;
-      window.history.replaceState({}, document.title, newUrl);
-
-      // Validate the token to greet the user or log it
-      apiFetch(`/api/invitations/validate?token=${encodeURIComponent(token)}`)
-        .then(r => r.json())
-        .then(res => {
-          if (res.success) {
-            console.log(`[Invitation] Valid invitation from ${res.inviterName}`);
-          }
-        })
-        .catch(err => console.warn('Invitation validation failed', err));
-    }
-  }, []);
-
-  // Poll for new requests & sync user with backend
-  useEffect(() => {
-    if (user && user.isEmailVerified) {
-      const savedInviteToken = sessionStorage.getItem('inviteToken') || undefined;
-
-      // Sync user profile on backend
-      apiFetch('/api/users/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: user.name,
-          inviteToken: savedInviteToken,
-          language: localStorage.getItem('RECALL_LANGUAGE') || 'it',
-        }),
-      })
-        .then((r) => r.json())
-        .then((res) => {
-          if (res.success) {
-            console.log('[Backend Sync] Utente sincronizzato:', res.user);
-            if (res.user?.avatarUrl) {
-              setUser((prev) => (prev ? { ...prev, avatarUrl: res.user.avatarUrl } : prev));
-            }
-            fetchShares();
-            if (res.linkedFriendship) {
-              sessionStorage.removeItem('inviteToken');
-              console.log(`[Backend Sync] Collegata richiesta di amicizia da: ${res.inviterName}`);
-            }
-            fetchFriends();
-          }
-        })
-        .catch((err) => console.warn('[Backend Sync] Errore sync:', err));
-
-      // Poll friends list every 10 seconds to discover incoming invitations or requests
-      const interval = setInterval(() => {
-        fetchFriends();
-        fetchShares();
-      }, 10000);
-
-      return () => clearInterval(interval);
-    }
-  }, [user?.email, user?.isEmailVerified]);
 
   return (
     <AppContext.Provider
@@ -1037,6 +745,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerWithEmail,
         loginWithGoogle,
         verifyEmailCode,
+        sendEmailCode,
         resendVerificationEmail,
         otpStatus,
         logout,
@@ -1071,8 +780,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
+  if (!context) throw new Error('useApp must be used within an AppProvider');
   return context;
 };

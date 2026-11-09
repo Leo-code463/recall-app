@@ -1,7 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">recall</string>
-    <string name="title_activity_main">recall</string>
-    <string name="package_name">com.recall.ai</string>
-    <string name="custom_url_scheme">com.recall.ai</string>
+    <string name="app_name">Recap</string>
+    <string name="title_activity_main">Recap</string>
 </resources>

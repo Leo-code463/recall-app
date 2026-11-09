@@ -5,15 +5,13 @@ import {
   Search,
   Clock,
   Users,
-  Tag,
-  ChevronRight,
   Filter,
   Mic,
   ArrowRight,
   Trash2,
 } from 'lucide-react';
-import { AILogo } from './AILogo';
 import { Meeting } from '../types';
+import { EmptySearchAnimation } from './EmptySearchAnimation';
 
 interface SwipeableMeetingCardProps {
   meeting: Meeting;
@@ -31,11 +29,9 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
   const { language, t } = useLanguage();
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [swipeOffset, setSwipeOffset] = useState<number>(0);
-  const [isSwiping, setIsSwiping] = useState(false);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStart(e.targetTouches[0].clientX);
-    setIsSwiping(true);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -43,7 +39,6 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
     const currentX = e.targetTouches[0].clientX;
     const diff = currentX - touchStart;
 
-    // Only allow swiping left (negative values) up to -110px
     if (diff < 0) {
       setSwipeOffset(Math.max(diff, -110));
     } else {
@@ -52,7 +47,6 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
   };
 
   const handleTouchEnd = () => {
-    setIsSwiping(false);
     if (swipeOffset < -60) {
       setSwipeOffset(-100);
     } else {
@@ -63,7 +57,7 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
 
   return (
     <div className="relative overflow-hidden rounded-3xl bg-transparent">
-      {/* Background Action Button (revealed on swipe) */}
+      {/* Action background button */}
       <div className="absolute inset-y-0 right-0 w-[100px] flex items-center justify-center text-white bg-rose-600 dark:bg-rose-800 z-0 rounded-r-3xl">
         <button
           onClick={(e) => {
@@ -73,11 +67,13 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
           className="w-full h-full flex flex-col items-center justify-center gap-1.5 cursor-pointer text-white font-bold"
         >
           <Trash2 className="w-5 h-5 text-white animate-pulse" />
-          <span className="text-[11px] uppercase tracking-wider font-extrabold text-white">{t('deleteLabel')}</span>
+          <span className="text-[11px] uppercase tracking-wider font-extrabold text-white">
+            {t('deleteLabel')}
+          </span>
         </button>
       </div>
 
-      {/* Main card body (slides over background) */}
+      {/* Main card body */}
       <div
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -95,7 +91,11 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
         <div>
           <div className="flex items-center justify-between gap-2 mb-3.5">
             <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-md bg-[#6A49D8]/10 text-[#6A49D8] dark:bg-[#6A49D8]/25 dark:text-[#B29FFF]">
-              {meeting.category === 'Riunione' ? (language === 'it' ? 'Riunione' : 'Meeting') : (meeting.category || 'Meeting')}
+              {meeting.category === 'Riunione'
+                ? language === 'it'
+                  ? 'Riunione'
+                  : 'Meeting'
+                : meeting.category || 'Meeting'}
             </span>
             <span className="text-xs font-medium text-gray-400 dark:text-neutral-400 flex items-center gap-1">
               <Clock className="w-3 h-3" />
@@ -113,7 +113,6 @@ const SwipeableMeetingCard: React.FC<SwipeableMeetingCardProps> = ({
             </p>
           )}
 
-          {/* Matching tags */}
           <div className="mt-4 flex flex-wrap gap-1.5">
             {meeting.tags.map((tag, idx) => (
               <span
@@ -173,7 +172,6 @@ export const SearchView: React.FC = () => {
       meeting.tags.includes(selectedTag);
 
     if (!matchesTag) return false;
-
     if (!searchQuery.trim()) return true;
 
     const q = searchQuery.toLowerCase();
@@ -194,14 +192,13 @@ export const SearchView: React.FC = () => {
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 pb-24">
-      {/* Blocco sticky: titolo + barra di ricerca + filtri restano sempre visibili in alto (come Spotify).
-          I margini negativi/padding ripetono quelli di <main> (incluso il safe-area della status bar). */}
-      <div className="sticky top-0 z-30 -mx-3 sm:mx-0 px-3 sm:px-0 -mt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:-mt-[calc(1.5rem+env(safe-area-inset-top,0px))] pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] bg-[#F5F3FD]/70 dark:bg-[#0F0D18]/70 backdrop-blur-xl pb-3 space-y-4">
+      {/* Blocco Sticky */}
+      <div className="sticky top-0 z-30 -mx-3 sm:mx-0 px-3 sm:px-0 -mt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:-mt-[calc(1.5rem+env(safe-area-inset-top,0px))] pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] header-blur is-scrolled pb-3 space-y-4">
         <h1 className="text-2xl sm:text-3xl font-extrabold text-[#16161E] dark:text-white tracking-tight">
           {t('searchTitle')}
         </h1>
 
-        {/* Search Input Bar */}
+        {/* Input Bar */}
         <div className="relative">
           <Search className="w-5 h-5 text-gray-400 absolute left-4 top-3.5" />
           <input
@@ -221,7 +218,7 @@ export const SearchView: React.FC = () => {
           )}
         </div>
 
-        {/* Filter Tag Pills (ora dentro il blocco sticky) */}
+        {/* Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           <span className="text-xs font-bold text-gray-400 dark:text-neutral-400 flex items-center gap-1 shrink-0">
             <Filter className="w-3.5 h-3.5" /> {t('filterLabel')}
@@ -242,7 +239,7 @@ export const SearchView: React.FC = () => {
         </div>
       </div>
 
-      {/* Recordings & Discussions Grid */}
+      {/* Grid delle registrazioni o stato vuoto con Animazione Lottie */}
       <div className="space-y-5">
         <div className="flex items-center justify-between">
           <span className="text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-neutral-400">
@@ -263,42 +260,38 @@ export const SearchView: React.FC = () => {
             ))}
           </div>
         ) : meetings.length === 0 ? (
-          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-10 sm:p-12 text-center border border-white/70 dark:border-white/10 space-y-4 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
-            <div className="w-14 h-14 rounded-2xl bg-[#6A49D8]/10 text-[#6A49D8] flex items-center justify-center mx-auto">
-              <Mic className="w-7 h-7" />
-            </div>
-            <h3 className="text-base font-bold text-[#16161E] dark:text-white">
-              {t('noRecordings')}
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed">
-              {t('noRecordingsDesc')}
-            </p>
-            <button
-              onClick={() => setIsRecordingModalOpen(true)}
-              className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-bold shadow-md shadow-[#6A49D8]/25 transition-all cursor-pointer"
-            >
-              <Mic className="w-4 h-4" />
-              <span>{t('startFirstRecording')}</span>
-            </button>
+          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-6 sm:p-8 border border-white/70 dark:border-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
+            <EmptySearchAnimation
+              title={t('noRecordings')}
+              subtitle={t('noRecordingsDesc')}
+              actionButton={
+                <button
+                  onClick={() => setIsRecordingModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-bold shadow-md shadow-[#6A49D8]/25 transition-all cursor-pointer"
+                >
+                  <Mic className="w-4 h-4" />
+                  <span>{t('startFirstRecording')}</span>
+                </button>
+              }
+            />
           </div>
         ) : (
-          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-10 text-center border border-white/70 dark:border-white/10 space-y-3 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
-            <Search className="w-8 h-8 text-gray-300 dark:text-neutral-600 mx-auto mb-2" />
-            <p className="text-sm font-bold text-[#16161E] dark:text-white">
-              {t('noSearchMatch')}
-            </p>
-            <p className="text-xs text-gray-400 dark:text-neutral-400 font-medium">
-              {t('noSearchMatchDesc')}
-            </p>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedTag('Tutti');
-              }}
-              className="mt-2 px-4 py-2 bg-gray-100 dark:bg-neutral-800 text-xs font-bold text-[#16161E] dark:text-white rounded-xl hover:bg-gray-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-            >
-              {t('showAllRecordings')}
-            </button>
+          <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-6 sm:p-8 border border-white/70 dark:border-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
+            <EmptySearchAnimation
+              title={t('noSearchMatch')}
+              subtitle={t('noSearchMatchDesc')}
+              actionButton={
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedTag('Tutti');
+                  }}
+                  className="px-4 py-2 bg-gray-100 dark:bg-neutral-800 text-xs font-bold text-[#16161E] dark:text-white rounded-xl hover:bg-gray-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                >
+                  {t('showAllRecordings')}
+                </button>
+              }
+            />
           </div>
         )}
       </div>

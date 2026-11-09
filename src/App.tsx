@@ -21,8 +21,7 @@ import { NavTab } from './types';
 
 /** Contenitore comune: sfondo sfumato "glass" fisso dietro a ogni schermata. */
 const GlassShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="ds min-h-screen text-[#16161E] dark:text-[#FCFCFC] transition-colors flex flex-col font-['Inter',sans-serif] overflow-x-clip">
-    <div aria-hidden className="glass-bg pointer-events-none fixed inset-0 -z-10" />
+  <div className="ds ds-bg min-h-screen text-[color:var(--label)] transition-colors flex flex-col overflow-x-clip">
     {children}
   </div>
 );
@@ -77,7 +76,7 @@ const AppContent: React.FC = () => {
   return (
     <GlassShell>
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-10 pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-10 pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))]">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeMeetingId ? `meeting-${activeMeetingId}` : isSettingsModalOpen ? 'settings' : activeTab}

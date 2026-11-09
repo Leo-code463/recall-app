@@ -3,50 +3,68 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy Policy – Recall AI</title>
-<meta name="description" content="Informativa sulla privacy di Recall AI / Recall AI Privacy Policy">
+<title>Privacy Policy – Recap</title>
+<meta name="description" content="Informativa sulla privacy di Recap / Recap Privacy Policy">
+<!-- Font Google: Poppins per i titoli e brand, Inter per il testo -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+
 <style>
   :root {
-    --bg: #F5F3FD;
+    --bg: #FFFFFF;
     --card: #FFFFFF;
     --ink: #16161E;
     --muted: #5E5C6B;
     --accent: #6A49D8;
     --line: #E6E3F3;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0F0D18;
-      --card: #1B1926;
-      --ink: #F4F3F8;
-      --muted: #ADACB5;
-      --accent: #B29FFF;
-      --line: #2E2A40;
-    }
-  }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; background: #FFFFFF; }
   body {
     margin: 0;
-    background: var(--bg);
+    background: #FFFFFF;
     color: var(--ink);
-    font: 16px/1.65 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  h1, h2, h3 {
+    font-family: 'Poppins', sans-serif;
   }
   .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
   header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
-  .brand { font-weight: 800; font-size: 20px; letter-spacing: -0.01em; }
-  .brand span { color: var(--accent); }
+  
+  /* Brand con vero logo incorporato e testo */
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 26px;
+    color: #16161E;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+  }
+  .brand img {
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+    display: block;
+  }
+
   nav.lang a {
     display: inline-block; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px;
-    color: var(--ink); text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 6px; background: var(--card);
+    color: var(--ink); text-decoration: none; font-weight: 600; font-size: 14px; margin-left: 6px; background: #FFFFFF;
   }
   nav.lang a:hover, nav.lang a:focus-visible { border-color: var(--accent); outline: none; }
   section.doc {
-    background: var(--card); border: 1px solid var(--line); border-radius: 24px;
+    background: #FFFFFF; border: 1px solid var(--line); border-radius: 24px;
     padding: 28px clamp(18px, 4vw, 40px); margin-bottom: 28px;
   }
-  h1 { font-size: clamp(26px, 5vw, 34px); line-height: 1.15; margin: 0 0 6px; letter-spacing: -0.02em; }
-  h2 { font-size: 19px; margin: 30px 0 8px; letter-spacing: -0.01em; }
+  h1 { font-size: clamp(26px, 5vw, 34px); line-height: 1.15; margin: 0 0 6px; letter-spacing: -0.02em; font-weight: 700; }
+  h2 { font-size: 19px; margin: 30px 0 8px; letter-spacing: -0.01em; font-weight: 600; }
   p, li { color: var(--ink); }
   p.meta { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
   ul { padding-left: 20px; }
@@ -59,7 +77,7 @@
   .table-wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 520px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; }
+  th { color: var(--muted); font-weight: 600; font-family: 'Poppins', sans-serif; }
   footer { text-align: center; color: var(--muted); font-size: 13px; }
 </style>
 </head>
@@ -67,11 +85,14 @@
 <div class="wrap">
 
   <header class="top">
-    <div class="brand">Recall<span>AI</span></div>
+    <div class="brand">
+      <!-- Immagine originale logo.noback.png caricata se presente, altrimenti fallback con percorso relativo -->
+      <img src="logo.noback.png" alt="Recap Logo" onerror="this.onerror=null; this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';">
+      <span>Recap</span>
+    </div>
     <nav class="lang" aria-label="Language">
       <a href="#it">Italiano</a>
       <a href="#en">English</a>
-      <a href="/">Home</a>
     </nav>
   </header>
 
@@ -80,10 +101,10 @@
     <h1>Informativa sulla privacy</h1>
     <p class="meta">Ultimo aggiornamento: 28 ottobre 2026</p>
 
-    <p>Questa informativa spiega quali dati raccoglie <strong>Recall AI</strong> (di seguito "Recall", "l'app"), perché li usa, con chi li condivide e come puoi controllarli. Recall è un assistente per riunioni: registra o carica un audio, lo trascrive, produce riassunti, mappe concettuali e azioni da sincronizzare con i tuoi strumenti Google.</p>
+    <p>Questa informativa spiega quali dati raccoglie <strong>Recap</strong> (di seguito "Recap", "l'app"), perché li usa, con chi li condivide e come puoi controllarli. Recap è un assistente per riunioni: registra o carica un audio, lo trascrive, produce riassunti, mappe concettuali e azioni da sincronizzare con i tuoi strumenti Google.</p>
 
     <h2>1. Titolare del trattamento e contatti</h2>
-    <p>Il titolare è lo sviluppatore di Recall AI. Per qualsiasi richiesta sulla privacy, inclusa la cancellazione dei dati, scrivi a <a href="mailto:leo@alea.pro">leo@alea.pro</a>.</p>
+    <p>Il titolare è lo sviluppatore di Recap. Per qualsiasi richiesta sulla privacy, inclusa la cancellazione dei dati, scrivi a <a href="mailto:it.recap.info@gmail.com">it.recap.info@gmail.com</a>.</p>
 
     <h2>2. Quali dati raccogliamo</h2>
     <div class="table-wrap">
@@ -103,7 +124,7 @@
     </div>
 
     <h2>3. Come usiamo i dati di Google</h2>
-    <p>Se colleghi il tuo account Google, Recall chiede solo i permessi (scope) necessari alle funzioni che usi:</p>
+    <p>Se colleghi il tuo account Google, Recap chiede solo i permessi (scope) necessari alle funzioni che usi:</p>
     <ul>
       <li><strong>Profilo ed email</strong>: accesso e identificazione dell'account.</li>
       <li><strong>Google Calendar</strong>: leggere i prossimi eventi, creare o eliminare eventi quando lo richiedi.</li>
@@ -112,33 +133,33 @@
     </ul>
     <p>Usiamo questi dati esclusivamente per offrirti queste funzioni, all'interno dell'app. Non li usiamo per pubblicità, non li vendiamo e non li usiamo per addestrare modelli di IA generalizzati.</p>
     <div class="limited">
-      <p style="margin:0">L'uso e il trasferimento a qualsiasi altra app, da parte di Recall AI, delle informazioni ricevute dalle API di Google rispetteranno la <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>, inclusi i requisiti di Limited Use.</p>
+      <p style="margin:0">L'uso e il trasferimento a qualsiasi altra app, da parte di Recap, delle informazioni ricevute dalle API di Google rispetteranno la <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>, inclusi i requisiti di Limited Use.</p>
     </div>
     <p>Puoi revocare l'accesso in qualsiasi momento dalle impostazioni dell'app o dalla pagina <a href="https://myaccount.google.com/permissions" rel="noopener">myaccount.google.com/permissions</a>.</p>
 
     <h2>4. Elaborazione con intelligenza artificiale</h2>
-    <p>Per strutturare la trascrizione, generare riassunti, rilevare impegni, rispondere alle tue domande sulla riunione e creare mappe concettuali, Recall invia il <strong>testo</strong> della trascrizione (non l'audio) a un servizio di IA di Google (Gemini) tramite il nostro server. Il testo è usato solo per produrre la risposta richiesta.</p>
+    <p>Per strutturare la trascrizione, generare riassunti, rilevare impegni, rispondere alle tue domande sulla riunione e creare mappe concettuali, Recap invia il <strong>testo</strong> della trascrizione (non l'audio) a un servizio di IA di Google (Gemini) tramite il nostro server. Il testo è usato solo per produrre la risposta richiesta.</p>
 
     <h2>5. Con chi condividiamo i dati</h2>
     <ul>
       <li><strong>Google</strong> (autenticazione, Calendar, Tasks, Docs/Drive, Firebase, Gemini).</li>
       <li><strong>Render</strong>, fornitore di hosting dove gira il nostro server.</li>
       <li><strong>Servizio di invio email</strong>, solo per recapitare il codice di verifica e gli inviti.</li>
-      <li><strong>Altri utenti di Recall</strong>, solo se scegli tu di condividere una conversazione con loro.</li>
+      <li><strong>Altri utenti di Recap</strong>, solo se scegli tu di condividere una conversazione con loro.</li>
     </ul>
     <p>Non vendiamo i tuoi dati e non li condividiamo con inserzionisti. Possiamo comunicarli se la legge ce lo impone.</p>
 
     <h2>6. Conservazione e cancellazione</h2>
-    <p>Conserviamo i dati dell'account e i contenuti finché mantieni l'account. Puoi eliminare singole registrazioni dall'app, revocare le conversazioni condivise e svuotare i dati locali dalle impostazioni. Per cancellare l'account e tutti i dati associati scrivi a <a href="mailto:leo@alea.pro">leo@alea.pro</a>: procederemo entro 30 giorni.</p>
+    <p>Conserviamo i dati dell'account e i contenuti finché mantieni l'account. Puoi eliminare singole registrazioni dall'app, revocare le conversazioni condivise e svuotare i dati locali dalle impostazioni. Per cancellare l'account e tutti i dati associati scrivi a <a href="mailto:it.recap.info@gmail.com">it.recap.info@gmail.com</a>: procederemo entro 30 giorni.</p>
 
     <h2>7. Sicurezza</h2>
     <p>I dati viaggiano su connessioni cifrate (HTTPS). L'accesso ai contenuti è limitato al tuo account. Nessun sistema è sicuro al 100%, ma adottiamo misure ragionevoli per proteggere le tue informazioni.</p>
 
     <h2>8. I tuoi diritti</h2>
-    <p>Se ti trovi nello Spazio Economico Europeo hai diritto di accedere ai tuoi dati, correggerli, cancellarli, limitarne il trattamento, opporti, chiederne la portabilità e proporre reclamo al Garante per la protezione dei dati personali. Per esercitarli scrivi a <a href="mailto:leo@alea.pro">leo@alea.pro</a>.</p>
+    <p>Se ti trovi nello Spazio Economico Europeo hai diritto di accedere ai tuoi dati, correggerli, cancellarli, limitarne il trattamento, opporti, chiederne la portabilità e proporre reclamo al Garante per la protezione dei dati personali. Per esercitarli scrivi a <a href="mailto:it.recap.info@gmail.com">it.recap.info@gmail.com</a>.</p>
 
     <h2>9. Minori</h2>
-    <p>Recall non è destinata a persone sotto i 16 anni e non raccogliamo consapevolmente dati di minori.</p>
+    <p>Recap non è destinata a persone sotto i 16 anni e non raccogliamo consapevolmente dati di minori.</p>
 
     <h2>10. Modifiche</h2>
     <p>Se modifichiamo questa informativa aggiorneremo la data in alto e, per cambiamenti importanti, ti avviseremo nell'app.</p>
@@ -149,10 +170,10 @@
     <h1>Privacy Policy</h1>
     <p class="meta">Last updated: October 28, 2026</p>
 
-    <p>This policy explains what data <strong>Recall AI</strong> ("Recall", "the app") collects, why it uses it, who it is shared with, and how you can control it. Recall is a meeting assistant: you record or upload audio, and it transcribes it, produces summaries, concept maps and action items to sync with your Google tools.</p>
+    <p>This policy explains what data <strong>Recap</strong> ("Recap", "the app") collects, why it uses it, who it is shared with, and how you can control it. Recap is a meeting assistant: you record or upload audio, and it transcribes it, produces summaries, concept maps and action items to sync with your Google tools.</p>
 
     <h2>1. Controller and contact</h2>
-    <p>The controller is the developer of Recall AI. For any privacy request, including data deletion, write to <a href="mailto:leo@alea.pro">leo@alea.pro</a>.</p>
+    <p>The controller is the developer of Recap. For any privacy request, including data deletion, write to <a href="mailto:it.recap.info@gmail.com">it.recap.info@gmail.com</a>.</p>
 
     <h2>2. Data we collect</h2>
     <div class="table-wrap">
@@ -172,7 +193,7 @@
     </div>
 
     <h2>3. How we use Google user data</h2>
-    <p>If you connect your Google account, Recall requests only the permissions (scopes) required by the features you use:</p>
+    <p>If you connect your Google account, Recap requests only the permissions (scopes) required by the features you use:</p>
     <ul>
       <li><strong>Profile and email</strong>: sign-in and account identification.</li>
       <li><strong>Google Calendar</strong>: read upcoming events, create or delete events when you ask.</li>
@@ -181,39 +202,39 @@
     </ul>
     <p>We use this data only to provide these features inside the app. We do not use it for advertising, we do not sell it, and we do not use it to train generalized AI models.</p>
     <div class="limited">
-      <p style="margin:0">Recall AI's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+      <p style="margin:0">Recap's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
     </div>
     <p>You can revoke access at any time from the app settings or at <a href="https://myaccount.google.com/permissions" rel="noopener">myaccount.google.com/permissions</a>.</p>
 
     <h2>4. AI processing</h2>
-    <p>To structure the transcript, generate summaries, detect commitments, answer your questions about a meeting and build concept maps, Recall sends the <strong>text</strong> of the transcript (not the audio) to a Google AI service (Gemini) through our server. The text is used only to produce the response you requested.</p>
+    <p>To structure the transcript, generate summaries, detect commitments, answer your questions about a meeting and build concept maps, Recap sends the <strong>text</strong> of the transcript (not the audio) to a Google AI service (Gemini) through our server. The text is used only to produce the response you requested.</p>
 
     <h2>5. Who we share data with</h2>
     <ul>
       <li><strong>Google</strong> (authentication, Calendar, Tasks, Docs/Drive, Firebase, Gemini).</li>
       <li><strong>Render</strong>, the hosting provider running our server.</li>
       <li><strong>Email delivery service</strong>, only to deliver verification codes and invitations.</li>
-      <li><strong>Other Recall users</strong>, only if you choose to share a conversation with them.</li>
+      <li><strong>Other Recap users</strong>, only if you choose to share a conversation with them.</li>
     </ul>
     <p>We do not sell your data and do not share it with advertisers. We may disclose it if required by law.</p>
 
     <h2>6. Retention and deletion</h2>
-    <p>We keep account data and content for as long as you keep your account. You can delete individual recordings in the app, revoke shared conversations, and clear local data from the settings. To delete your account and all associated data, write to <a href="mailto:leo@alea.pro">leo@alea.pro</a>; we will act within 30 days.</p>
+    <p>We keep account data and content for as long as you keep your account. You can delete individual recordings in the app, revoke shared conversations, and clear local data from the settings. To delete your account and all associated data, write to <a href="mailto:it.recap.info@gmail.com">it.recap.info@gmail.com</a>; we will act within 30 days.</p>
 
     <h2>7. Security</h2>
     <p>Data travels over encrypted connections (HTTPS). Access to content is limited to your account. No system is 100% secure, but we take reasonable measures to protect your information.</p>
 
     <h2>8. Your rights</h2>
-    <p>If you are in the European Economic Area, you have the right to access, correct, delete, restrict or object to the processing of your data, to data portability, and to lodge a complaint with your data protection authority. To exercise them, write to <a href="mailto:leo@alea.pro">leo@alea.pro</a>.</p>
+    <p>If you are in the European Economic Area, you have the right to access, correct, delete, restrict or object to the processing of your data, to data portability, and to lodge a complaint with your data protection authority. To exercise them, write to <a href="mailto:it.recap.info@gmail.com">it.recap.info@gmail.com</a>.</p>
 
     <h2>9. Children</h2>
-    <p>Recall is not intended for people under 16 and we do not knowingly collect data from children.</p>
+    <p>Recap is not intended for people under 16 and we do not knowingly collect data from children.</p>
 
     <h2>10. Changes</h2>
     <p>If we change this policy we will update the date above and, for material changes, notify you in the app.</p>
   </section>
 
-  <footer>© 2026 Recall AI · <a href="/">Home</a> · <a href="mailto:leo@alea.pro">leo@alea.pro</a></footer>
+  <footer>© 2026 Recap · <a href="mailto:it.recap.info@gmail.com">it.recap.info@gmail.com</a></footer>
 </div>
 </body>
 </html>

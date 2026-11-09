@@ -32,7 +32,7 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-white/80 dark:bg-[#1A1D1F]/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-white/10 transition-colors shadow-xs">
+    <header className="relative sticky top-0 z-30 bg-white/80 dark:bg-[#1A1D1F]/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-white/10 transition-colors shadow-xs pt-4 pt-safe">
       <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-10 h-16 sm:h-18 flex items-center justify-between">
         {/* Logo & Identity */}
         <div className="flex items-center gap-2.5 sm:gap-3">
@@ -45,6 +45,9 @@ export const Navbar: React.FC = () => {
             className="flex items-center gap-2.5 cursor-pointer focus:outline-none"
           >
             <AILogo size="md" className="sm:scale-110" />
+            <span className="font-extrabold text-base sm:text-lg tracking-tight text-[#16161E] dark:text-white">
+              Recap
+            </span>
           </button>
           <div className="flex items-center gap-2">
             <span
@@ -117,6 +120,9 @@ export const Navbar: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Sfumatura leggera inferiore (bianca in tema chiaro, nera in tema scuro) */}
+      <div className="pointer-events-none absolute top-full left-0 right-0 h-6 bg-gradient-to-b from-white/70 dark:from-black/70 to-transparent" />
     </header>
   );
 };

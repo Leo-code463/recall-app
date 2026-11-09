@@ -15,6 +15,9 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "noImplicitAny": false,
+    "strictNullChecks": false,
     "paths": {
       "@/*": [
         "./*"

@@ -9,8 +9,8 @@ export const GOOGLE_SCOPES = [
 ];
 
 export class GoogleWorkspaceService {
-  private static STORAGE_KEY_CALENDAR = 'recall_calendar_events';
-  private static STORAGE_KEY_TASKS = 'recall_tasks_items';
+  private static STORAGE_KEY_CALENDAR = 'recap_calendar_events';
+  private static STORAGE_KEY_TASKS = 'recap_tasks_items';
   private static accessToken: string | null = null;
   private static userEmail: string | null = null;
 
@@ -38,17 +38,28 @@ export class GoogleWorkspaceService {
     return this.accessToken;
   }
 
+  static clearCache() {
+    try {
+      if (this.userEmail) {
+        localStorage.removeItem(this.getStorageKeyCalendar());
+        localStorage.removeItem(this.getStorageKeyTasks());
+      }
+      localStorage.removeItem(this.STORAGE_KEY_CALENDAR);
+      localStorage.removeItem(this.STORAGE_KEY_TASKS);
+    } catch (e) {
+      console.warn('Errore durante la pulizia della cache workspace:', e);
+    }
+  }
+
   // ==========================================
   // GOOGLE CALENDAR
   // ==========================================
 
-  // Fetch real Google Calendar Events from the Google Calendar API
   static async fetchGoogleCalendarEvents(accessToken?: string): Promise<GoogleCalendarEvent[] | null> {
     const token = accessToken || this.accessToken;
     if (!token) return null;
 
     try {
-      // Query events from start of today up to 30 days ahead
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
 
@@ -81,10 +92,9 @@ export class GoogleWorkspaceService {
         location: item.location || (item.hangoutLink ? 'Google Meet' : ''),
         meetUrl: item.hangoutLink || item.conferenceData?.entryPoints?.[0]?.uri,
         attendees: item.attendees?.map((a: any) => a.displayName || a.email) || [],
-        isRecallLinked: Boolean(item.description?.includes('Recall') || item.extendedProperties?.private?.recallLinked),
+        isRecallLinked: Boolean(item.description?.includes('Recap') || item.extendedProperties?.private?.recapLinked),
       }));
 
-      // Deduplicate to avoid repeating identical events in the UI
       const seen = new Set<string>();
       const events: GoogleCalendarEvent[] = [];
       for (const e of rawEvents) {
@@ -104,7 +114,6 @@ export class GoogleWorkspaceService {
     }
   }
 
-  // Get cached calendar events
   static getEvents(initialEvents: GoogleCalendarEvent[] = []): GoogleCalendarEvent[] {
     try {
       const stored = localStorage.getItem(this.getStorageKeyCalendar());
@@ -128,7 +137,6 @@ export class GoogleWorkspaceService {
     return initialEvents;
   }
 
-  // Save calendar events to local storage
   static saveEvents(events: GoogleCalendarEvent[]) {
     try {
       localStorage.setItem(this.getStorageKeyCalendar(), JSON.stringify(events));
@@ -137,12 +145,11 @@ export class GoogleWorkspaceService {
     }
   }
 
-  // Add event to Google Calendar (calls real API)
   static async addEvent(
     eventData: {
       title: string;
-      start: string; // ISO
-      end: string;   // ISO
+      start: string;
+      end: string;
       description?: string;
       location?: string;
       attendees?: string[];
@@ -161,7 +168,7 @@ export class GoogleWorkspaceService {
       try {
         const payload = {
           summary: eventData.title,
-          description: eventData.description || 'Pianificato con Recall AI Meeting Assistant',
+          description: eventData.description || 'Pianificato con Recap Meeting Assistant',
           start: { dateTime: eventData.start },
           end: { dateTime: eventData.end },
           location: eventData.location,
@@ -223,7 +230,6 @@ export class GoogleWorkspaceService {
     return { event: newEvent, updatedList };
   }
 
-  // Delete an event from Google Calendar API & Local state
   static async deleteEvent(
     eventId: string,
     existingEvents: GoogleCalendarEvent[],
@@ -255,13 +261,11 @@ export class GoogleWorkspaceService {
   // GOOGLE TASKS
   // ==========================================
 
-  // Fetch real Google Tasks from Google Tasks API
   static async fetchGoogleTasks(accessToken?: string): Promise<GoogleTaskItem[] | null> {
     const token = accessToken || this.accessToken;
     if (!token) return null;
 
     try {
-      // First get primary task list or use @default
       const res = await fetch(
         'https://tasks.googleapis.com/tasks/v1/lists/@default/tasks?showCompleted=true&showHidden=true&maxResults=50',
         {
@@ -296,7 +300,6 @@ export class GoogleWorkspaceService {
     }
   }
 
-  // Get cached Tasks
   static getTasks(initialTasks: GoogleTaskItem[] = []): GoogleTaskItem[] {
     try {
       const stored = localStorage.getItem(this.getStorageKeyTasks());
@@ -309,7 +312,6 @@ export class GoogleWorkspaceService {
     return initialTasks;
   }
 
-  // Save Tasks
   static saveTasks(tasks: GoogleTaskItem[]) {
     try {
       localStorage.setItem(this.getStorageKeyTasks(), JSON.stringify(tasks));
@@ -318,7 +320,6 @@ export class GoogleWorkspaceService {
     }
   }
 
-  // Add Task to Google Tasks API & Local state
   static async addTask(
     taskData: {
       title: string;
@@ -371,7 +372,6 @@ export class GoogleWorkspaceService {
     return { task: newTask, updatedList };
   }
 
-  // Toggle Task Completion in Google Tasks API & Local state
   static async toggleTask(
     taskId: string,
     existingTasks: GoogleTaskItem[],
@@ -405,7 +405,6 @@ export class GoogleWorkspaceService {
     return updated;
   }
 
-  // Create Google Doc for Concept Map
   static async createGoogleDocForConceptMap(
     meetingTitle: string,
     mapData: {
@@ -418,7 +417,6 @@ export class GoogleWorkspaceService {
     if (!activeToken) return null;
 
     try {
-      // 1. Create a blank Google Document
       const createRes = await fetch('https://docs.googleapis.com/v1/documents', {
         method: 'POST',
         headers: {
@@ -426,7 +424,7 @@ export class GoogleWorkspaceService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: `Recall AI - Mappa Concettuale: ${meetingTitle}`,
+          title: `Recap - Mappa Concettuale: ${meetingTitle}`,
         }),
       });
 
@@ -439,8 +437,7 @@ export class GoogleWorkspaceService {
       const documentId = doc.documentId;
       if (!documentId) return null;
 
-      // 2. Format a gorgeous textual representation of the Mind Map
-      let docText = `RECALL AI - MAPPA CONCETTUALE E STRUTTURA LOGICA\n`;
+      let docText = `RECAP - MAPPA CONCETTUALE E STRUTTURA LOGICA\n`;
       docText += `Riunione: ${meetingTitle}\n`;
       docText += `Data esportazione: ${new Date().toLocaleDateString('it-IT')} ore ${new Date().toLocaleTimeString('it-IT')}\n`;
       docText += `========================================================================\n\n`;
@@ -466,9 +463,8 @@ export class GoogleWorkspaceService {
         }
       });
       docText += `\n\n========================================================================\n`;
-      docText += `Generato automaticamente dall'intelligenza artificiale di Recall AI.\n`;
+      docText += `Generato automaticamente dall'intelligenza artificiale di Recap.\n`;
 
-      // 3. Update the document with text content
       const updateRes = await fetch(`https://docs.googleapis.com/v1/documents/${documentId}:batchUpdate`, {
         method: 'POST',
         headers: {
@@ -492,7 +488,6 @@ export class GoogleWorkspaceService {
         return null;
       }
 
-      // Return the URL to open the document
       return `https://docs.google.com/document/d/${documentId}/edit`;
     } catch (err) {
       console.error('Error creating Google Doc:', err);

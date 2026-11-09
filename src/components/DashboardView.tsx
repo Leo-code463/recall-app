@@ -3,8 +3,6 @@ import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { hapticTap } from '../utils/haptic';
 import {
-  Mic,
-  Clock,
   Plus,
   RefreshCw,
   Inbox,
@@ -12,68 +10,58 @@ import {
   Bell,
   Check,
   ChevronRight,
+  Calendar,
+  Clock,
+  Video,
+  ExternalLink,
+  Mic,
+  RotateCw,
 } from 'lucide-react';
 import { AILogo } from './AILogo';
 
-/** Calcola il saluto dinamico in base all'orario esatto del dispositivo */
 const getGreeting = (lang: string): string => {
   const hour = new Date().getHours();
   const isIt = lang === 'it';
 
-  if (hour >= 5 && hour < 12) {
-    return isIt ? 'Buongiorno' : 'Good morning';
-  } else if (hour >= 12 && hour < 18) {
-    return isIt ? 'Buon pomeriggio' : 'Good afternoon';
-  } else if (hour >= 18 && hour < 22) {
-    return isIt ? 'Buonasera' : 'Good evening';
-  } else {
-    return isIt ? 'Buonanotte' : 'Good night';
-  }
+  if (hour >= 5 && hour < 12) return isIt ? 'Buongiorno' : 'Good morning';
+  if (hour >= 12 && hour < 18) return isIt ? 'Buon pomeriggio' : 'Good afternoon';
+  if (hour >= 18 && hour < 22) return isIt ? 'Buonasera' : 'Good evening';
+  return isIt ? 'Buonanotte' : 'Good night';
 };
 
 export const DashboardView: React.FC = () => {
   const {
     user,
-    upcomingEvents,
     todayTasks,
     meetings,
-    taskAiDetections,
     isAnalyzingTasks,
-    taskAiError,
     analyzeTasksWithAi,
-    setIsRecordingModalOpen,
     toggleTask,
     addTask,
-    refreshCalendarEvents,
     setIsSettingsModalOpen,
     setActiveTab,
     setActiveMeetingId,
-    setCalendarPreviewData,
     friendsReceivedPending,
     setShowFriendsSetting,
+    setIsRecordingModalOpen,
   } = useApp();
 
   const { language, t } = useLanguage();
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [isAddingTask, setIsAddingTask] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  
-  // Saluto dinamico sincronizzato con l'orologio
   const [greetingText, setGreetingText] = useState(() => getGreeting(language));
 
-  // Aggiorna il saluto quando cambia orario o lingua
   useEffect(() => {
     setGreetingText(getGreeting(language));
     const interval = setInterval(() => {
       setGreetingText(getGreeting(language));
-    }, 60000); // controlla ogni minuto
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [language]);
 
-  // Lo sfondo sfocato dell'header compare solo quando la pagina scorre
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
     onScroll();
@@ -81,36 +69,6 @@ export const DashboardView: React.FC = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Next upcoming meeting
-  const nextMeeting = upcomingEvents.length > 0 ? upcomingEvents[0] : {
-    id: 'mock_event_1',
-    title: 'Marketing Web Agency',
-    start: new Date(Date.now() + 25 * 60 * 1000).toISOString(),
-    end: new Date(Date.now() + 85 * 60 * 1000).toISOString(),
-    meetUrl: 'https://meet.google.com/abc-defg-hij',
-    attendees: ['Giulia Alberti', 'Leo Rossini'],
-  };
-
-  const getRelativeTimeString = (startDateStr: string) => {
-    try {
-      const diffMs = new Date(startDateStr).getTime() - Date.now();
-      if (diffMs <= 0) return t('ongoing');
-      const diffMins = Math.round(diffMs / (60 * 1000));
-      if (diffMins < 60) {
-        return t('inMinutes').replace('{mins}', String(diffMins));
-      }
-      const diffHours = Math.round(diffMins / 60);
-      if (diffHours < 24) {
-        if (diffHours === 1) return t('inHour');
-        return t('inHours').replace('{hours}', String(diffHours));
-      }
-      return new Date(startDateStr).toLocaleDateString([], { day: 'numeric', month: 'short' });
-    } catch {
-      return t('inMinutes').replace('{mins}', '25');
-    }
-  };
-
-  // Etichetta "Oggi, 09:30" / "Ieri, 16:00" / "12 ott, 18:45" calcolata dalla data reale della riunione
   const formatMeetingDateTime = (dateStr: string) => {
     try {
       const d = new Date(dateStr);
@@ -131,39 +89,13 @@ export const DashboardView: React.FC = () => {
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
-    await addTask(
-      newTaskTitle.trim(),
-      language === 'it' ? 'Aggiunto manualmente dalla Dashboard' : 'Added manually from Dashboard'
-    );
+    await addTask(newTaskTitle.trim());
     setNewTaskTitle('');
     setIsAddingTask(false);
   };
 
-  const handleManualSync = async () => {
-    setIsSyncing(true);
-    await refreshCalendarEvents();
-    setTimeout(() => setIsSyncing(false), 650);
-  };
+  const userName = user?.name ? user.name.split(' ')[0] : 'Leonardo';
 
-  const handleTaskSyncClick = (task: any) => {
-    const isTask1 = task.id === 'task-1';
-    const isTask2 = task.id === 'task-2';
-
-    setCalendarPreviewData({
-      title: task.title,
-      date: new Date().toISOString().split('T')[0],
-      startTime: isTask1 ? '11:00' : isTask2 ? '14:30' : '17:00',
-      endTime: isTask1 ? '11:45' : isTask2 ? '15:15' : '17:45',
-      description: language === 'it'
-        ? `Sincronizzazione automatica per l'attività: "${task.title}".\nIdentificato da Recall AI come impegno da programmare.`
-        : `Automatic synchronization for task: "${task.title}".\nIdentified by Recall AI as a commitment to schedule.`,
-      onSave: async (savedEvent: any) => {
-        await toggleTask(task.id);
-      }
-    });
-  };
-
-  /* ---------- Stile "Glassmorphism" ---------- */
   const GLASS =
     'bg-white/75 backdrop-blur-xl border border-white/70 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:bg-white/[0.06] dark:border-white/10 dark:shadow-none';
   const INK = 'text-[#16161E] dark:text-white';
@@ -172,7 +104,7 @@ export const DashboardView: React.FC = () => {
   const BTN_PRIMARY =
     'inline-flex items-center justify-center gap-1.5 rounded-full bg-[#6A49D8] text-white font-semibold shadow-[0_6px_18px_-6px_rgba(106,73,216,0.55)] transition-all hover:bg-[#5B3CC4] active:scale-95 cursor-pointer dark:bg-[#A088F9] dark:text-[#14101F] dark:hover:bg-[#B29FFF] dark:shadow-none';
   const TEAL_TEXT = 'text-[#0EBFA2] dark:text-[#5DE6CF]';
-  
+
   const CARD_TONES = [
     {
       iconBox: 'bg-[#E4DAF7] text-[#6A49D8] dark:bg-white/10 dark:text-[#B29FFF]',
@@ -184,27 +116,22 @@ export const DashboardView: React.FC = () => {
     },
   ];
 
-  const SECTION_STICKY =
-    'sticky z-40 -mx-3 sm:mx-0 px-3 sm:px-3 py-3 top-[calc(4.375rem+env(safe-area-inset-top,0px))] sm:top-[calc(5rem+env(safe-area-inset-top,0px))] bg-[#F5F3FD]/80 backdrop-blur-xl dark:bg-[#0F0D18]/75';
-
   return (
-    <div className="ds space-y-8 animate-in fade-in duration-300 max-w-2xl mx-auto pb-16">
-      {/* ===== 1. Header sticky ===== */}
+    <div className="ds space-y-7 animate-in fade-in duration-300 max-w-2xl mx-auto pb-16">
+      {/* 1. Header sticky riposizionata in alto */}
       <div
-        className={`sticky top-0 z-50 -mx-3 sm:mx-0 px-3 sm:px-0 -mt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:-mt-[calc(1.5rem+env(safe-area-inset-top,0px))] pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-3 flex items-center justify-between gap-3 transition-all duration-200 ${
-          scrolled ? 'bg-[#F5F3FD]/75 backdrop-blur-xl dark:bg-[#0F0D18]/70' : 'bg-transparent'
+        className={`sticky top-0 z-50 -mx-3 sm:mx-0 px-3 sm:px-0 -mt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:-mt-[calc(1.5rem+env(safe-area-inset-top,0px))] pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-3 flex items-center justify-between gap-3 transition-all duration-200 header-blur ${
+          scrolled ? 'is-scrolled' : ''
         }`}
       >
-        <div className="min-w-0">
-          {/* Saluto orario dinamico */}
-          <p className={`text-[15px] leading-5 ${MUTED}`}>{greetingText}</p>
-          <h1 className={`font-display text-[26px] font-semibold leading-8 tracking-tight truncate ${INK}`}>
-            {user?.name || 'Leonardo Fiorot'}
-          </h1>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <AILogo size="sm" />
+          <span className="font-extrabold text-lg tracking-tight text-[#16161E] dark:text-white">
+            Recap
+          </span>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* Campanella notifiche */}
           <button
             id="dashboard-notifications-btn"
             onClick={() => {
@@ -212,24 +139,23 @@ export const DashboardView: React.FC = () => {
               setIsSettingsModalOpen(true);
               setShowFriendsSetting(true);
             }}
-            className={`relative w-11 h-11 rounded-full flex items-center justify-center active:scale-95 transition-transform cursor-pointer ${GLASS}`}
+            className={`relative w-10 h-10 rounded-full flex items-center justify-center active:scale-95 transition-transform cursor-pointer ${GLASS}`}
             title={t('viewNotificationsAndFriends')}
             aria-label={t('viewNotificationsAndFriends')}
           >
-            <Bell className={`w-5 h-5 ${INK}`} strokeWidth={1.9} />
+            <Bell className={`w-4.5 h-4.5 ${INK}`} strokeWidth={1.9} />
             {friendsReceivedPending.length > 0 && (
-              <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-[#F43F6E] border-2 border-white dark:border-[#1B1926] rounded-full" />
+              <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#F43F6E] border-2 border-white dark:border-[#1B1926] rounded-full" />
             )}
           </button>
 
-          {/* Profilo */}
           <button
             id="dashboard-profile-btn"
             onClick={() => {
               hapticTap('light');
               setActiveTab('profile');
             }}
-            className={`w-11 h-11 rounded-full flex items-center justify-center overflow-hidden active:scale-95 transition-transform cursor-pointer ${GLASS}`}
+            className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden active:scale-95 transition-transform cursor-pointer ${GLASS}`}
             title={t('viewProfileAndSettings')}
             aria-label={t('viewProfileAndSettings')}
           >
@@ -241,7 +167,7 @@ export const DashboardView: React.FC = () => {
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <span className={`text-sm font-semibold ${PRIMARY_TEXT}`}>
+              <span className={`text-xs font-semibold ${PRIMARY_TEXT}`}>
                 {(user?.name || 'L')
                   .split(' ')
                   .filter(Boolean)
@@ -255,47 +181,105 @@ export const DashboardView: React.FC = () => {
         </div>
       </div>
 
-      {/* ===== 2. Prossima riunione ===== */}
-      {nextMeeting && (
-        <div className="rounded-[26px] p-4 flex items-center gap-3.5 bg-[#EAE8FE]/90 border border-white/70 shadow-[0_10px_40px_-16px_rgba(106,73,216,0.3)] dark:bg-[#302850]/80 dark:border-white/10 dark:shadow-none">
-          <div className="w-14 h-14 rounded-2xl bg-[#D6CFF9] dark:bg-white/10 flex items-center justify-center shrink-0">
-            <Clock className={`w-6 h-6 ${PRIMARY_TEXT}`} strokeWidth={1.9} />
+      {/* 2. Banner Viola Hero con Glassmorphism */}
+      <div className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#6A49D8] via-[#5E37D3] to-[#4922B4] p-6 sm:p-7 text-white shadow-xl shadow-[#6A49D8]/20 transition-all">
+        {/* Glow ed elementi decorativi di sfondo */}
+        <div className="pointer-events-none absolute -top-16 -right-16 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-[#B29FFF]/20 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col gap-6">
+          {/* Sezione Saluto e Azioni Generali */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2">
+                {greetingText}, {userName}! 👋
+              </h1>
+              <p className="text-xs sm:text-sm font-medium text-white/80">
+                {language === 'it'
+                  ? `Hai ${meetings.length} riunioni e ${todayTasks.length} task in programma.`
+                  : `You have ${meetings.length} meetings and ${todayTasks.length} tasks scheduled.`}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => hapticTap('light')}
+                title="Sincronizza"
+                className="p-2.5 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/20 backdrop-blur-md text-white transition-all active:scale-95 cursor-pointer"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  hapticTap('medium');
+                  setIsRecordingModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white hover:bg-white/95 text-[#6A49D8] text-xs sm:text-sm font-extrabold shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                <Mic className="w-4 h-4 text-[#6A49D8]" />
+                <span>{language === 'it' ? 'Nuova Registrazione' : 'New Recording'}</span>
+              </button>
+            </div>
           </div>
 
-          <div className="min-w-0 flex-1">
-            <p className={`text-[13px] font-medium leading-snug ${PRIMARY_TEXT}`}>
-              {t('nextMeeting')} · {getRelativeTimeString(nextMeeting.start)}
-            </p>
-            <h3 className={`font-display text-base font-semibold leading-snug truncate mt-0.5 ${INK}`}>
-              {nextMeeting.title}
-            </h3>
-          </div>
+          {/* Card Interna Glassmorphism: Prossima Riunione Sincronizzata */}
+          <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-inner">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-white/15 text-[10px] font-extrabold uppercase tracking-wider text-white border border-white/15">
+                  <Calendar className="w-3 h-3" />
+                  {language === 'it' ? 'PROSSIMA RIUNIONE' : 'NEXT MEETING'}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-200 text-[10px] font-bold border border-emerald-400/20">
+                  <Video className="w-3 h-3" />
+                  Google Meet
+                </span>
+              </div>
 
-          <div className="shrink-0">
-            {nextMeeting.meetUrl ? (
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                  Riunione Sistema Solare
+                </h3>
+                <p className="text-xs font-semibold text-white/80 flex items-center gap-1.5 mt-0.5">
+                  <Clock className="w-3.5 h-3.5 text-white/70" />
+                  <span>16:30 – 17:30</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
               <a
-                href={nextMeeting.meetUrl}
+                href="https://meet.google.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`${BTN_PRIMARY} h-10 px-5 text-sm`}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 backdrop-blur-md text-white text-xs font-bold transition-all active:scale-95"
               >
-                {t('join')}
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{language === 'it' ? 'Apri Meet' : 'Open Meet'}</span>
               </a>
-            ) : (
+
               <button
-                onClick={() => setIsRecordingModalOpen(true)}
-                className={`${BTN_PRIMARY} h-10 px-5 text-sm`}
+                type="button"
+                onClick={() => {
+                  hapticTap('medium');
+                  setIsRecordingModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-white/95 text-[#6A49D8] text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
               >
-                {t('record')}
+                <Mic className="w-3.5 h-3.5 text-[#6A49D8]" />
+                <span>{language === 'it' ? 'Registra' : 'Record'}</span>
               </button>
-            )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* ===== 3. Discussioni recenti ===== */}
+      {/* 3. Discussioni recenti */}
       <section>
-        <div className={`${SECTION_STICKY} flex items-center justify-between`}>
+        <div className="flex items-center justify-between py-2">
           <h2 className={`font-display text-lg font-semibold ${INK}`}>{t('recentDiscussions')}</h2>
           <button
             onClick={() => setActiveTab('search')}
@@ -366,9 +350,9 @@ export const DashboardView: React.FC = () => {
         )}
       </section>
 
-      {/* ===== 4. Task di oggi ===== */}
+      {/* 4. Task di oggi */}
       <section>
-        <div className={`${SECTION_STICKY} flex items-center justify-between gap-3`}>
+        <div className="flex items-center justify-between gap-3 py-2">
           <div className="flex items-baseline gap-2.5 min-w-0">
             <h2 className={`font-display text-lg font-semibold ${INK}`}>{t('todayTasksTitle')}</h2>
             <span className={`inline-flex items-center gap-1 text-[13px] font-medium ${TEAL_TEXT}`}>
@@ -386,7 +370,6 @@ export const DashboardView: React.FC = () => {
           </button>
         </div>
 
-        {/* Aggiunta rapida */}
         {isAddingTask && (
           <form
             onSubmit={handleCreateTask}
@@ -408,66 +391,38 @@ export const DashboardView: React.FC = () => {
 
         {todayTasks.length > 0 ? (
           <div className={`mt-1 rounded-[28px] px-4 ${GLASS}`}>
-            {todayTasks.map((task) => {
-              const isTask1 = task.id === 'task-1';
-              const isTask2 = task.id === 'task-2';
-              const isTask3 = task.id === 'task-3';
-
-              const dueTime = isTask1 ? '11:00' : isTask2 ? '14:30' : '17:00';
-
-              return (
-                <div
-                  key={task.id}
-                  className="flex items-center gap-3.5 py-4 border-b border-[#ECEBF3] dark:border-white/10 last:border-b-0"
+            {todayTasks.map((task) => (
+              <div
+                key={task.id}
+                className="flex items-center gap-3.5 py-4 border-b border-[#ECEBF3] dark:border-white/10 last:border-b-0"
+              >
+                <button
+                  onClick={() => toggleTask(task.id)}
+                  className="-m-2.5 p-2.5 shrink-0 cursor-pointer"
+                  aria-label={task.title}
                 >
-                  <button
-                    onClick={() => toggleTask(task.id)}
-                    className="-m-2.5 p-2.5 shrink-0 cursor-pointer"
-                    aria-label={task.title}
+                  <span
+                    className={`w-6 h-6 rounded-full border-[1.5px] flex items-center justify-center transition-all ${
+                      task.completed
+                        ? 'bg-[#6A49D8] border-[#6A49D8] text-white dark:bg-[#A088F9] dark:border-[#A088F9] dark:text-[#14101F]'
+                        : 'border-[#D8D8E0] dark:border-white/20'
+                    }`}
                   >
-                    <span
-                      className={`w-6 h-6 rounded-full border-[1.5px] flex items-center justify-center transition-all ${
-                        task.completed
-                          ? 'bg-[#6A49D8] border-[#6A49D8] text-white dark:bg-[#A088F9] dark:border-[#A088F9] dark:text-[#14101F]'
-                          : 'border-[#D8D8E0] dark:border-white/20'
-                      }`}
-                    >
-                      {task.completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
-                    </span>
-                  </button>
+                    {task.completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                  </span>
+                </button>
 
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`text-[15px] font-medium leading-snug truncate ${
-                        task.completed ? `line-through ${MUTED}` : INK
-                      }`}
-                    >
-                      {task.title}
-                    </p>
-                    <p className={`text-[13px] mt-0.5 truncate ${MUTED}`}>
-                      {language === 'it' ? `Oggi, ${dueTime}` : `Today, ${dueTime}`}
-                      {task.notes && <> · {task.notes.split('Sincronizzato da: ')[1] || task.notes}</>}
-                    </p>
-                  </div>
-
-                  <div className="shrink-0">
-                    {task.completed || isTask3 ? (
-                      <span className="inline-flex items-center h-8 px-3 rounded-full bg-[#EDEDF2] text-[#6D6D77] text-[13px] font-medium dark:bg-white/10 dark:text-[#ADACB5]">
-                        {t('locale')}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleTaskSyncClick(task)}
-                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#DBF2EF] text-[#0EBFA2] text-[13px] font-semibold transition-all hover:brightness-95 active:scale-95 cursor-pointer dark:bg-[#1F3B3A] dark:text-[#5DE6CF]"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" strokeWidth={2.2} />
-                        <span>Sync</span>
-                      </button>
-                    )}
-                  </div>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`text-[15px] font-medium leading-snug truncate ${
+                      task.completed ? `line-through ${MUTED}` : INK
+                    }`}
+                  >
+                    {task.title}
+                  </p>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         ) : (
           <div className={`mt-1 rounded-[28px] px-5 py-8 text-center ${GLASS}`}>
@@ -477,7 +432,7 @@ export const DashboardView: React.FC = () => {
         )}
       </section>
 
-      {/* ===== 5. Scanner IA dei task ===== */}
+      {/* 5. Scanner IA */}
       <div className={`rounded-[28px] p-4 flex items-center justify-between gap-3 ${GLASS}`}>
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-11 h-11 rounded-2xl bg-[#E4DAF7] dark:bg-white/10 flex items-center justify-center shrink-0">

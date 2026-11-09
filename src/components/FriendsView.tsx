@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
+import { StickyHeader } from './StickyHeader';
 import { 
   Users, 
   UserPlus, 
@@ -9,11 +10,7 @@ import {
   Clock, 
   Inbox, 
   Sparkles, 
-  User, 
-  Mail, 
-  HelpCircle,
   Gift,
-  ArrowRight,
   Share2,
   FileText,
   Trash2
@@ -21,6 +18,7 @@ import {
 import { UserAvatar } from './UserAvatar';
 import { ShareConversationModal } from './ShareConversationModal';
 import { SharedConversationViewer } from './SharedConversationViewer';
+import { EmptyState } from './EmptyState';
 
 export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const { 
@@ -42,13 +40,11 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [shareTarget, setShareTarget] = useState<{ email: string; name: string } | null>(null);
   const [viewerShareId, setViewerShareId] = useState<string | null>(null);
 
-  // Refresh friends list and shared conversations when mounting FriendsView to ensure up-to-date data
   useEffect(() => {
     fetchFriends();
     fetchShares();
   }, []);
 
-  // Foto profilo di un utente a partire dalla lista amici (le condivisioni portano solo l'email)
   const avatarOf = (email: string): string | undefined =>
     friendsList.find((f) => f.email === email)?.avatarUrl;
 
@@ -66,27 +62,28 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
-      {/* View Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#ECEBF3] dark:border-white/10">
-        <div>
-          <h2 className="text-xl font-extrabold text-[#16161E] dark:text-white tracking-tight flex items-center gap-2">
-            <Users className="w-5.5 h-5.5 text-[#6A49D8]" />
-            <span>{t('friendsAndCollaborationViewTitle')}</span>
-          </h2>
-          <p className="text-xs text-gray-400 dark:text-neutral-400 font-medium">
-            {t('friendsAndCollaborationViewSubtitle')}
-          </p>
+      {/* View Header (Sticky) */}
+      <StickyHeader className="border-b border-[#ECEBF3] dark:border-white/10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+          <div>
+            <h2 className="text-xl font-extrabold text-[#16161E] dark:text-white tracking-tight flex items-center gap-2">
+              <Users className="w-5.5 h-5.5 text-[#6A49D8]" />
+              <span>{t('friendsAndCollaborationViewTitle')}</span>
+            </h2>
+            <p className="text-xs text-gray-400 dark:text-neutral-400 font-medium">
+              {t('friendsAndCollaborationViewSubtitle')}
+            </p>
+          </div>
+          
+          <button
+            onClick={() => setIsAddFriendModalOpen(true)}
+            className="px-4 py-2.5 bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-black rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 self-start sm:self-auto"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>{t('addFriendBtn')}</span>
+          </button>
         </div>
-        
-        {/* Add Friend Trigger Button */}
-        <button
-          onClick={() => setIsAddFriendModalOpen(true)}
-          className="px-4 py-2.5 bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-xs font-black rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 self-start sm:self-auto"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>{t('addFriendBtn')}</span>
-        </button>
-      </div>
+      </StickyHeader>
 
       {/* 1. SEZIONE RICHIESTE RICEVUTE (PENDING INCOMING) */}
       {friendsReceivedPending.length > 0 && (
@@ -112,7 +109,6 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                   </div>
                 </div>
                 
-                {/* Accept/Reject actions */}
                 <div className="flex items-center gap-2">
                   <button
                     disabled={isResponding === req.friendshipId}
@@ -137,33 +133,40 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         </div>
       )}
 
+      {friendsReceivedPending.length === 0 && (
+        <EmptyState
+          icon={Inbox}
+          compact
+          title={language === 'it' ? 'Nessuna richiesta di amicizia' : 'No friend requests yet'}
+          description={
+            language === 'it'
+              ? 'Quando qualcuno ti aggiunge su Recall, lo vedrai qui.'
+              : 'When someone adds you on Recall, you will see it here.'
+          }
+        />
+      )}
+
       {/* Grid containing Current Friends & Sent Pending Requests */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Column 1 & 2: Friends list */}
         <div className="md:col-span-2 space-y-2">
           <h3 className="text-[11px] font-black uppercase text-gray-400 dark:text-neutral-500 tracking-wider pl-1">
             {t('myFriends')} ({friendsList.length})
           </h3>
           
           {friendsList.length === 0 ? (
-            <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 p-8 text-center flex flex-col items-center justify-center space-y-3.5 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
-              <div className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-black/25 border border-white/70 dark:border-white/10 flex items-center justify-center text-gray-400 dark:text-neutral-500">
-                <Users className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-bold text-[#16161E] dark:text-white">{t('noFriendsAdded')}</p>
-                <p className="text-[10px] text-gray-400 dark:text-neutral-400 font-medium max-w-[260px] mx-auto leading-normal">
-                  {t('noFriendsAddedDesc')}
-                </p>
-              </div>
-              <button
-                onClick={() => setIsAddFriendModalOpen(true)}
-                className="px-4 py-2 bg-gray-50 hover:bg-[#F1EFF9] dark:bg-white/10 dark:hover:bg-neutral-800 text-[#16161E] dark:text-neutral-200 text-[11px] font-bold rounded-lg border border-white/70 dark:border-white/10 cursor-pointer transition-all"
-              >
-                {t('sendFirstInvite')}
-              </button>
-            </div>
+            <EmptyState
+              icon={Users}
+              title={t('noFriendsAdded')}
+              description={t('noFriendsAddedDesc')}
+              action={
+                <button
+                  onClick={() => setIsAddFriendModalOpen(true)}
+                  className="px-4 py-2 bg-[#6A49D8] hover:bg-[#5B3CC4] text-white text-[11px] font-bold rounded-lg cursor-pointer transition-colors"
+                >
+                  {t('sendFirstInvite')}
+                </button>
+              }
+            />
           ) : (
             <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 overflow-hidden divide-y divide-gray-100 dark:divide-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
               {friendsList.map((friend) => (
@@ -184,7 +187,6 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                     </div>
                   </div>
 
-                  {/* Future credits structure indicator as requested by instructions */}
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => setShareTarget({ email: friend.email, name: friend.name })}
@@ -200,8 +202,6 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                     >
                       <Gift className="w-3 h-3" />
                       <span>{friend.creditsEarned || 0} {language === 'it' ? 'crediti' : 'credits'}</span>
-                      
-                      {/* Interactive tooltip */}
                       <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-48 p-2 bg-gray-950 dark:bg-neutral-800 text-white rounded-lg text-[9px] font-medium leading-normal shadow-lg text-center normal-case pointer-events-none z-10 border border-neutral-700/50">
                         {t('futureCreditsTooltip')}
                       </span>
@@ -213,17 +213,13 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
           )}
         </div>
 
-        {/* Column 3: Sent pending requests (attesa) */}
         <div className="space-y-2">
           <h3 className="text-[11px] font-black uppercase text-gray-400 dark:text-neutral-500 tracking-wider pl-1">
             {t('pendingRequests')} ({friendsSentPending.length})
           </h3>
 
           {friendsSentPending.length === 0 ? (
-            <div className="bg-white/50 dark:bg-white/[0.06] rounded-[24px] border border-dashed border-white/70 dark:border-white/10 p-6 text-center text-gray-400 dark:text-neutral-500">
-              <Clock className="w-5 h-5 mx-auto mb-1.5 opacity-60" />
-              <p className="text-[10px] font-bold">{t('noPendingRequests')}</p>
-            </div>
+            <EmptyState icon={Clock} compact title={t('noPendingRequests')} />
           ) : (
             <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 overflow-hidden divide-y divide-gray-100 dark:divide-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
               {friendsSentPending.map((req) => (
@@ -241,7 +237,6 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                     {req.email}
                   </p>
                   
-                  {/* Note if invited user is unregistered */}
                   {!req.registered && (
                     <span className="text-[9px] text-purple-600 dark:text-purple-400 font-bold mt-1 block">
                       ✦ {language === 'it' ? 'Non registrato (invitato via email)' : 'Unregistered (invited via email)'}
@@ -252,12 +247,9 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
             </div>
           )}
         </div>
-
       </div>
 
-      {/* Conversazioni condivise: ricevute e inviate */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Condivise con me */}
         <div className="space-y-2">
           <h3 className="text-[11px] font-black uppercase text-gray-400 dark:text-neutral-500 tracking-wider pl-1 flex items-center gap-1.5">
             <Inbox className="w-3.5 h-3.5" />
@@ -268,12 +260,11 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
           </h3>
 
           {receivedShares.length === 0 ? (
-            <div className="bg-white/50 dark:bg-white/[0.06] rounded-[24px] border border-dashed border-white/70 dark:border-white/10 p-6 text-center text-gray-400 dark:text-neutral-500">
-              <FileText className="w-5 h-5 mx-auto mb-1.5 opacity-60" />
-              <p className="text-[10px] font-bold">
-                {language === 'it' ? 'Nessuna conversazione condivisa con te' : 'No conversations shared with you'}
-              </p>
-            </div>
+            <EmptyState
+              icon={FileText}
+              compact
+              title={language === 'it' ? 'Nessuna conversazione condivisa con te' : 'No conversations shared with you'}
+            />
           ) : (
             <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 overflow-hidden divide-y divide-gray-100 dark:divide-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
               {receivedShares.map((sh) => (
@@ -306,7 +297,6 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
           )}
         </div>
 
-        {/* Condivise da me */}
         <div className="space-y-2">
           <h3 className="text-[11px] font-black uppercase text-gray-400 dark:text-neutral-500 tracking-wider pl-1 flex items-center gap-1.5">
             <Share2 className="w-3.5 h-3.5" />
@@ -316,14 +306,15 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
           </h3>
 
           {sentShares.length === 0 ? (
-            <div className="bg-white/50 dark:bg-white/[0.06] rounded-[24px] border border-dashed border-white/70 dark:border-white/10 p-6 text-center text-gray-400 dark:text-neutral-500">
-              <Share2 className="w-5 h-5 mx-auto mb-1.5 opacity-60" />
-              <p className="text-[10px] font-bold">
-                {language === 'it'
+            <EmptyState
+              icon={Share2}
+              compact
+              title={
+                language === 'it'
                   ? 'Tocca "Condividi" accanto a un amico per inviargli una conversazione'
-                  : 'Tap "Share" next to a friend to send them a conversation'}
-              </p>
-            </div>
+                  : 'Tap "Share" next to a friend to send them a conversation'
+              }
+            />
           ) : (
             <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 overflow-hidden divide-y divide-gray-100 dark:divide-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
               {sentShares.map((sh) => (
@@ -356,7 +347,6 @@ export const FriendsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Info Banner about credits */}
       <div className="p-4 rounded-3xl bg-purple-50/50 dark:bg-[#6A49D8]/5 border border-purple-100/50 dark:border-[#6A49D8]/10 flex items-start gap-3.5 mt-2">
         <Sparkles className="w-5 h-5 text-[#6A49D8] shrink-0 mt-0.5" />
         <div className="space-y-0.5">

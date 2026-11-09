@@ -10,30 +10,75 @@ import {
   Eye,
   EyeOff,
   Hand,
+  KeyRound,
+  ArrowLeft,
+  CheckCircle2,
 } from 'lucide-react';
 import { AILogo } from './AILogo';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, PanInfo } from 'motion/react';
+import { sendPasswordResetLink } from '../services/emailService';
 
 export const AuthModal: React.FC = () => {
   const { loginWithEmail, registerWithEmail, loginWithGoogle, isDarkMode, toggleTheme } = useApp();
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isSignUp, setIsSignUp] = useState<boolean>(false);
+  const [isForgotPassword, setIsForgotPassword] = useState<boolean>(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const [name, setName] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
 
-    if (!email.trim() || !password.trim()) {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setError('Inserisci la tua email per ricevere il link di ripristino.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await sendPasswordResetLink(cleanEmail);
+      setSuccessMessage('Email di ripristino inviata con successo! Controlla la tua posta per accedere a Recall.');
+    } catch (err: any) {
+      console.error('[Firebase Reset Error]', err);
+      if (err?.code === 'auth/user-not-found') {
+        setError('Nessun utente trovato con questo indirizzo email.');
+      } else if (err?.code === 'auth/invalid-email') {
+        setError('L\'indirizzo email inserito non è valido.');
+      } else {
+        setError(err?.message || 'Impossibile inviare l\'email di reset. Riprova tra poco.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMessage(null);
+
+    if (isForgotPassword) {
+      return handleForgotPassword(e);
+    }
+
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
       setError('Inserisci tutti i campi obbligatori');
       return;
     }
 
-    if (password.length < 6) {
+    if (cleanPassword.length < 6) {
       setError('La password deve contenere almeno 6 caratteri');
       return;
     }
@@ -46,12 +91,12 @@ export const AuthModal: React.FC = () => {
           setLoading(false);
           return;
         }
-        await registerWithEmail(name.trim(), email.trim(), password);
+        await registerWithEmail(name.trim(), cleanEmail, cleanPassword);
       } else {
-        await loginWithEmail(email.trim(), password);
+        await loginWithEmail(cleanEmail, cleanPassword);
       }
     } catch (err: any) {
-      setError(err.message || 'Errore durante l\'autenticazione. Riprova.');
+      setError(err?.message || 'Errore durante l\'autenticazione. Riprova.');
     } finally {
       setLoading(false);
     }
@@ -59,29 +104,36 @@ export const AuthModal: React.FC = () => {
 
   const handleGoogleAuth = async () => {
     setError(null);
+    setSuccessMessage(null);
     setLoading(true);
     try {
       await loginWithGoogle();
     } catch (err: any) {
       console.error(err);
-      const errCode = err?.code || '';
-      const errMsg = err?.message || '';
-      
-      if (errCode === 'auth/operation-not-allowed') {
-        setError("L'accesso con Google non è abilitato nel tuo progetto Firebase. Per favore, vai sulla Console Firebase > Authentication > Sign-in method e abilita il provider 'Google'.");
-      } else if (errCode === 'auth/unauthorized-domain') {
-        setError(`Questo dominio (${window.location.hostname}) non è autorizzato in Firebase. Vai su Console Firebase > Authentication > Settings > Authorized Domains e aggiungi '${window.location.hostname}'.`);
-      } else {
-        setError(`Impossibile completare l'autenticazione Google: ${errMsg || errCode || 'Errore sconosciuto'}`);
-      }
+      setError(`Impossibile completare l'autenticazione Google: ${err?.message || 'Errore sconosciuto'}`);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (info.offset.x < -85) {
+      if (!isSignUp && !isForgotPassword) {
+        setIsSignUp(true);
+        setError(null);
+        setSuccessMessage(null);
+      }
+    } else if (info.offset.x > 85) {
+      if (isSignUp && !isForgotPassword) {
+        setIsSignUp(false);
+        setError(null);
+        setSuccessMessage(null);
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col justify-between py-8 px-4 sm:px-6 lg:px-8 transition-colors">
-      {/* Top Navbar / Theme Switcher */}
       <div className="max-w-md w-full mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2">
           <AILogo size="md" />
@@ -98,17 +150,22 @@ export const AuthModal: React.FC = () => {
         </button>
       </div>
 
-      {/* Main Card */}
       <div className="max-w-md w-full mx-auto my-auto">
         <div className="text-center mb-6">
           <div className="inline-flex justify-center mb-3">
             <AILogo size="2xl" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#16161E] dark:text-white tracking-tight">
-            {isSignUp ? 'Crea il tuo account' : 'Bentornato'}
+            {isForgotPassword
+              ? 'Recupera Password'
+              : isSignUp
+              ? 'Crea il tuo account'
+              : 'Bentornato'}
           </h1>
           <p className="mt-1.5 text-xs sm:text-sm text-gray-500 dark:text-neutral-400 font-medium">
-            {isSignUp
+            {isForgotPassword
+              ? 'Inserisci la tua email per ricevere il link sicuro di ripristino'
+              : isSignUp
               ? 'Registrati per sincronizzare Google Calendar, Tasks e gestire le riunioni con l\'AI'
               : 'Accedi per visualizzare le tue registrazioni, compiti Google e agenda'}
           </p>
@@ -118,105 +175,95 @@ export const AuthModal: React.FC = () => {
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.4}
-          onDragEnd={(event, info) => {
-            if (info.offset.x < -85) {
-              // Swipe left -> register
-              if (!isSignUp) {
-                setIsSignUp(true);
-                setError(null);
-              }
-            } else if (info.offset.x > 85) {
-              // Swipe right -> login
-              if (isSignUp) {
-                setIsSignUp(false);
-                setError(null);
-              }
-            }
-          }}
+          onDragEnd={handleDragEnd}
           className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] py-7 px-6 sm:px-8 rounded-[28px] border border-white/70 dark:border-white/10 transition-colors relative cursor-grab active:cursor-grabbing select-none shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none"
         >
-          {/* Tab Switcher: Accedi / Registrati */}
-          <div className="flex bg-[#F3F1FC]/70 dark:bg-black/25 p-1 rounded-2xl mb-6 border border-[#E6E3F3] dark:border-white/10">
-            <button
-              id="auth-tab-login"
-              type="button"
-              onClick={() => {
-                setIsSignUp(false);
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                !isSignUp
-                  ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#16161E] dark:text-white shadow-xs'
-                  : 'text-gray-500 dark:text-neutral-400 hover:text-[#16161E] dark:hover:text-white'
-              }`}
-            >
-              Accedi
-            </button>
-            <button
-              id="auth-tab-signup"
-              type="button"
-              onClick={() => {
-                setIsSignUp(true);
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                isSignUp
-                  ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#16161E] dark:text-white shadow-xs'
-                  : 'text-gray-500 dark:text-neutral-400 hover:text-[#16161E] dark:hover:text-white'
-              }`}
-            >
-              Registrati
-            </button>
-          </div>
+          {!isForgotPassword && (
+            <div className="flex bg-[#F3F1FC]/70 dark:bg-black/25 p-1 rounded-2xl mb-6 border border-[#E6E3F3] dark:border-white/10">
+              <button
+                id="auth-tab-login"
+                type="button"
+                onClick={() => {
+                  setIsSignUp(false);
+                  setError(null);
+                  setSuccessMessage(null);
+                }}
+                className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  !isSignUp
+                    ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#16161E] dark:text-white shadow-xs'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#16161E] dark:hover:text-white'
+                }`}
+              >
+                Accedi
+              </button>
+              <button
+                id="auth-tab-signup"
+                type="button"
+                onClick={() => {
+                  setIsSignUp(true);
+                  setError(null);
+                  setSuccessMessage(null);
+                }}
+                className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  isSignUp
+                    ? 'bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] text-[#16161E] dark:text-white shadow-xs'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-[#16161E] dark:hover:text-white'
+                }`}
+              >
+                Registrati
+              </button>
+            </div>
+          )}
 
           <AnimatePresence mode="wait">
             <motion.div
-              key={isSignUp ? 'signup-fields' : 'login-fields'}
-              initial={{ opacity: 0, x: isSignUp ? 20 : -20 }}
+              key={isForgotPassword ? 'forgot-fields' : isSignUp ? 'signup-fields' : 'login-fields'}
+              initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: isSignUp ? -20 : 20 }}
+              exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
             >
-              {/* Google Sign-In / Sign-Up Button */}
-              <button
-                id="auth-google-auth-btn"
-                type="button"
-                onClick={handleGoogleAuth}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-bold hover:bg-gray-50 dark:hover:bg-white/10 transition-all shadow-2xs hover:shadow-xs active:scale-[0.99] cursor-pointer disabled:opacity-50"
-              >
-                <svg className="w-4.5 h-4.5" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span>{isSignUp ? 'Registrati con Google' : 'Accedi con Google'}</span>
-              </button>
+              {!isForgotPassword && (
+                <>
+                  <button
+                    id="auth-google-auth-btn"
+                    type="button"
+                    onClick={handleGoogleAuth}
+                    disabled={loading}
+                    className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-bold hover:bg-gray-50 dark:hover:bg-white/10 transition-all shadow-2xs hover:shadow-xs active:scale-[0.99] cursor-pointer disabled:opacity-50"
+                  >
+                    <svg className="w-4.5 h-4.5" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                    <span>{isSignUp ? 'Registrati con Google' : 'Accedi con Google'}</span>
+                  </button>
 
-              {/* Divider */}
-              <div className="relative flex items-center justify-center my-5">
-                <div className="border-t border-[#ECEBF3] dark:border-white/10 w-full" />
-                <span className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500 absolute">
-                  {isSignUp ? 'oppure registrati via email' : 'oppure con email'}
-                </span>
-              </div>
+                  <div className="relative flex items-center justify-center my-5">
+                    <div className="border-t border-[#ECEBF3] dark:border-white/10 w-full" />
+                    <span className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500 absolute">
+                      {isSignUp ? 'oppure registrati via email' : 'oppure con email'}
+                    </span>
+                  </div>
+                </>
+              )}
 
-              {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
-                {isSignUp && (
+                {isSignUp && !isForgotPassword && (
                   <div>
                     <label className="block text-xs font-bold text-[#16161E] dark:text-white mb-1.5">
                       Nome e Cognome *
@@ -228,7 +275,7 @@ export const AuthModal: React.FC = () => {
                         type="text"
                         required={isSignUp}
                         value={name}
-                        onChange={(e) => setName(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
                         placeholder="Il tuo nome e cognome"
                         className="w-full pl-10 pr-3.5 py-3 rounded-2xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#6A49D8] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
                       />
@@ -247,41 +294,65 @@ export const AuthModal: React.FC = () => {
                       type="email"
                       required
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                       placeholder="nome@azienda.com"
                       className="w-full pl-10 pr-3.5 py-3 rounded-2xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#6A49D8] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-[#16161E] dark:text-white mb-1.5">
-                    Password *
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-gray-400 dark:text-neutral-500 absolute left-3.5 top-3.5" />
-                    <input
-                      id="auth-input-password"
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder={isSignUp ? 'Almeno 6 caratteri' : 'La tua password'}
-                      className="w-full pl-10 pr-10 py-3 rounded-2xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#6A49D8] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                {!isForgotPassword && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-[#16161E] dark:text-white">
+                        Password *
+                      </label>
+                      {!isSignUp && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsForgotPassword(true);
+                            setError(null);
+                            setSuccessMessage(null);
+                          }}
+                          className="text-[11px] font-semibold text-[#6A49D8] hover:underline cursor-pointer"
+                        >
+                          Password dimenticata?
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-gray-400 dark:text-neutral-500 absolute left-3.5 top-3.5" />
+                      <input
+                        id="auth-input-password"
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={password}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                        placeholder={isSignUp ? 'Almeno 6 caratteri' : 'La tua password'}
+                        className="w-full pl-10 pr-10 py-3 rounded-2xl border border-[#E6E3F3] dark:border-white/10 bg-[#F3F1FC]/70 dark:bg-black/25 text-[#16161E] dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#6A49D8] transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {error && (
                   <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-medium animate-in fade-in duration-200">
                     {error}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-400 text-xs font-medium animate-in fade-in duration-200 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{successMessage}</span>
                   </div>
                 )}
 
@@ -293,9 +364,14 @@ export const AuthModal: React.FC = () => {
                 >
                   {loading ? (
                     <span>Elaborazione in corso...</span>
+                  ) : isForgotPassword ? (
+                    <>
+                      <span>Invia Link di Ripristino</span>
+                      <KeyRound className="w-4 h-4" />
+                    </>
                   ) : isSignUp ? (
                     <>
-                      <span>Registrati e verifica codice OTP</span>
+                      <span>Registrati</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   ) : (
@@ -305,21 +381,34 @@ export const AuthModal: React.FC = () => {
                     </>
                   )}
                 </button>
+
+                {isForgotPassword && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPassword(false);
+                      setError(null);
+                      setSuccessMessage(null);
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-[#16161E] dark:hover:text-white pt-2 cursor-pointer transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Torna all'accesso</span>
+                  </button>
+                )}
               </form>
             </motion.div>
           </AnimatePresence>
 
-          {/* Swipe indicator label */}
-          <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-gray-400 dark:text-neutral-500 font-bold uppercase tracking-wider">
-            <Hand className="w-3.5 h-3.5 text-[#6A49D8]/50 animate-bounce" />
-            <span>Trascina per passare a {isSignUp ? 'Accedi' : 'Registrati'}</span>
-          </div>
+          {!isForgotPassword && (
+            <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-gray-400 dark:text-neutral-500 font-bold uppercase tracking-wider">
+              <Hand className="w-3.5 h-3.5 text-[#6A49D8]/50 animate-bounce" />
+              <span>Trascina per passare a {isSignUp ? 'Accedi' : 'Registrati'}</span>
+            </div>
+          )}
         </motion.div>
-
-
       </div>
 
-      {/* Footer copyright */}
       <div className="max-w-md w-full mx-auto text-center mt-6">
         <p className="text-[11px] text-gray-400 dark:text-neutral-500 font-medium">
           Recall AI Assistant • Sicurezza e crittografia audio end-to-end

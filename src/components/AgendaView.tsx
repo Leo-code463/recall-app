@@ -99,7 +99,7 @@ export const AgendaView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-300 pb-20">
       {/* Titolo sticky. Deve essere figlio diretto della pagina (non di un contenitore basso come prima),
           altrimenti "sticky" resta confinato nel contenitore e finisce sopra i pulsanti coprendoli. */}
-      <div className="sticky top-0 z-30 -mx-3 sm:mx-0 px-3 sm:px-0 -mt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:-mt-[calc(1.5rem+env(safe-area-inset-top,0px))] pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] bg-[#F5F3FD]/70 dark:bg-[#0F0D18]/70 backdrop-blur-xl pb-2">
+      <div className="sticky top-0 z-30 -mx-3 sm:mx-0 px-3 sm:px-0 -mt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:-mt-[calc(1.5rem+env(safe-area-inset-top,0px))] pt-[calc(0.875rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] header-blur is-scrolled pb-2">
         <h1 className="text-2xl sm:text-3xl font-extrabold text-[#16161E] dark:text-white tracking-tight">
           {t('agenda')}
         </h1>

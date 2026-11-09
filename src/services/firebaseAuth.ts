@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { GoogleWorkspaceService } from './calendarService';
+import { sendVerificationEmailFirebase } from './emailService';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -26,8 +27,6 @@ export const GOOGLE_WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
 ];
 
-// Standard provider used for authentication (login & registration).
-// We add workspace scopes directly so that the user is logged into both identity & calendar services at once.
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({
   prompt: 'select_account',
@@ -36,12 +35,9 @@ GOOGLE_WORKSPACE_SCOPES.forEach((scope) => {
   provider.addScope(scope);
 });
 
-// Flag to indicate if we are in the middle of a sign-in flow.
 let isSigningIn = false;
-// Cache the access token in memory (never localStorage for security)
 let cachedAccessToken: string | null = null;
 
-// Initialize auth state listener
 export const initAuth = (
   onAuthSuccess?: (user: User, token?: string) => void,
   onAuthFailure?: () => void
@@ -62,7 +58,6 @@ export const initAuth = (
   });
 };
 
-// Must be called from a button click or user interaction
 export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
   try {
     isSigningIn = true;
@@ -80,7 +75,6 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       ...GOOGLE_WORKSPACE_SCOPES
     ];
     const scopeString = encodeURIComponent(scopes.join(' '));
-    // We use response_type=id_token token to get both the ID token and an access token directly from Google OAuth
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token%20token&scope=${scopeString}&prompt=select_account&nonce=${nonce}`;
 
     const width = 500;
@@ -128,14 +122,12 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
             }
           }
         } catch (e) {
-          // Ignore cross-origin errors (expected while popup is on accounts.google.com)
+          // Ignora errori di cross-origin durante il redirect su accounts.google.com
         }
       }, 500);
     });
 
-    // Create a credential with BOTH the ID token and the Access token
     const credential = GoogleAuthProvider.credential(parsedTokens.idToken, parsedTokens.accessToken);
-    // Authenticate with Firebase using standard credential signing, which is super fast and bypasses client-side userinfo call
     const result = await signInWithCredential(auth, credential);
 
     if (!result || !result.user) {
@@ -163,14 +155,12 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       return { user: result.user, accessToken: cachedAccessToken };
     } catch (fallbackError: any) {
       console.error('Fallback standard login also failed:', fallbackError);
-      throw error; // Throw original error so the user gets the best message
+      throw error;
     }
   } finally {
     isSigningIn = false;
   }
 };
-
-// ---------- Account email + password (gestiti interamente da Firebase Auth) ----------
 
 export const friendlyAuthError = (err: any): string => {
   switch (err?.code) {
@@ -198,7 +188,7 @@ export const friendlyAuthError = (err: any): string => {
   }
 };
 
-/** Crea l'account e imposta il nome. L'email va poi verificata con il codice OTP. */
+/** Crea l'account, imposta il nome e invia l'email di verifica tramite Firebase Native. */
 export const registerEmailAccount = async (name: string, email: string, password: string): Promise<User> => {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   try {
@@ -206,7 +196,11 @@ export const registerEmailAccount = async (name: string, email: string, password
   } catch (e) {
     console.warn('updateProfile failed:', e);
   }
-  // La verifica dell'email avviene con un codice OTP inviato dal nostro server (vedi otpService.ts)
+  try {
+    await sendVerificationEmailFirebase();
+  } catch (e) {
+    console.warn('sendVerificationEmailFirebase alla registrazione fallito:', e);
+  }
   return cred.user;
 };
 
@@ -244,13 +238,6 @@ export const logoutAuth = async () => {
   GoogleWorkspaceService.setAccessToken(null);
 };
 
-/**
- * requestGoogleWorkspaceToken launches a standard client-side Google OAuth 2.0 
- * implicit grant popup flow using the Client ID from firebase-applet-config.json.
- * This obtains the requested sensitive Google Workspace scopes (Calendar, Tasks, Docs, etc.)
- * directly in the browser and returns the Google Access Token without going through Firebase Auth.
- * This completely avoids triggering the Firebase 401 invalid-credential error!
- */
 export const requestGoogleWorkspaceToken = async (): Promise<string> => {
   const clientId = firebaseConfig.oAuthClientId;
   if (!clientId) {
@@ -306,7 +293,7 @@ export const requestGoogleWorkspaceToken = async (): Promise<string> => {
           }
         }
       } catch (e) {
-        // Cross-origin errors are expected and can be safely ignored while the popup is on accounts.google.com
+        // Ignora errori cross-origin
       }
     }, 500);
   });

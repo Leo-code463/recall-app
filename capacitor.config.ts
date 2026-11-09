@@ -1,8 +1,8 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.recall.ai',
-  appName: 'recall',
+  appId: 'com.recap.app',
+  appName: 'Recap',
   webDir: 'dist',
   server: {
     androidScheme: 'https'

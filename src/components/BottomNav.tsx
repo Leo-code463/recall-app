@@ -42,14 +42,19 @@ export const BottomNav: React.FC = () => {
         type="button"
         onClick={() => handleClick(id)}
         aria-current={isActive ? 'page' : undefined}
-        className={`flex h-full flex-col items-center justify-center gap-[3px] text-[10px] font-medium transition-colors cursor-pointer active:opacity-70 ${
-          isActive
-            ? 'text-[#6A49D8] dark:text-[#A088F9]'
-            : 'text-[#6F6D75] hover:text-[#16161E] dark:text-[#A3A1AD] dark:hover:text-white'
-        }`}
+        className="flex h-full items-center justify-center cursor-pointer active:opacity-60"
       >
-        <Icon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.3 : 1.8} />
-        <span className="leading-none">{label}</span>
+        {/* Capsula evidenziata dietro la tab attiva, come in iOS 26 */}
+        <span
+          className={`flex w-full flex-col items-center justify-center gap-0.5 rounded-full py-1.5 text-[10px] font-medium transition-colors ${
+            isActive
+              ? 'bg-[color:var(--fill)] text-[color:var(--accent)]'
+              : 'text-[color:var(--label-2)]'
+          }`}
+        >
+          <Icon className="h-[23px] w-[23px]" strokeWidth={isActive ? 2.2 : 1.7} />
+          <span className="leading-none">{label}</span>
+        </span>
       </button>
     );
   };
@@ -57,10 +62,10 @@ export const BottomNav: React.FC = () => {
   return (
     <nav
       aria-label="Navigazione principale"
-      className="ds fixed inset-x-0 bottom-0 z-40 border-t border-black/5 bg-white/90 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur-xl dark:border-white/10 dark:bg-[#0F0D18]/90"
+      className="ds fixed inset-x-0 bottom-[calc(10px+env(safe-area-inset-bottom,0px))] z-40 px-4 pointer-events-none"
     >
-      {/* Barra compatta a tutta larghezza (stile Spotify): 5 colonne uguali, microfono al centro */}
-      <div className="mx-auto grid h-14 max-w-md grid-cols-5 items-stretch">
+      {/* Barra flottante a capsula in Liquid Glass */}
+      <div className="liquid pointer-events-auto mx-auto grid h-[64px] max-w-sm grid-cols-5 items-stretch gap-0.5 rounded-full p-1.5">
         {renderItem('home', t('home'), Home)}
         {renderItem('search', t('search'), Search)}
 
@@ -73,9 +78,9 @@ export const BottomNav: React.FC = () => {
               setIsRecordingModalOpen(true);
             }}
             aria-label="Registra nuova riunione"
-            className="-translate-y-1.5 flex h-11 w-11 items-center justify-center rounded-full bg-[#6A49D8] text-white shadow-[0_6px_16px_-4px_rgba(106,73,216,0.55)] transition-transform active:scale-95 hover:bg-[#5B3CC4] cursor-pointer dark:bg-[#A088F9] dark:text-[#14101F] dark:shadow-[0_6px_16px_-4px_rgba(160,136,249,0.4)] dark:hover:bg-[#B29FFF]"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--accent)] text-white transition-transform active:scale-90 cursor-pointer"
           >
-            <Mic className="h-5 w-5" strokeWidth={2.1} />
+            <Mic className="h-5 w-5" strokeWidth={2} />
           </button>
         </div>
 

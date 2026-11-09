@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
+import { StickyHeader } from './StickyHeader';
 import { FriendsView } from './FriendsView';
+import { ProfileImageCropper } from './ProfileImageCropper';
+import { uploadAvatar } from '../services/avatarService';
 import {
   ArrowLeft,
   Moon,
-  Sun,
   User,
   Lock,
   Globe,
@@ -25,6 +27,7 @@ import {
   Download,
   Mic,
   Activity,
+  Camera,
 } from 'lucide-react';
 
 export const SettingsModal: React.FC = () => {
@@ -44,17 +47,20 @@ export const SettingsModal: React.FC = () => {
     setGoogleError,
     updateUserProfile,
     triggerSuccess,
+    setAvatarUrl,
   } = useApp();
 
   const { language, setLanguage, t } = useLanguage();
 
   const [activeSubView, setActiveSubView] = useState<'main' | 'profile' | 'password' | 'privacy' | 'meet' | 'voice'>('main');
 
-  // Profile Form State
   const [profileName, setProfileName] = useState(user?.name || '');
   const [profileEmail, setProfileEmail] = useState(user?.email || '');
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [tempImageSrc, setTempImageSrc] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
 
-  // Password Form State
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -63,7 +69,6 @@ export const SettingsModal: React.FC = () => {
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailSummary, setEmailSummary] = useState(false);
 
-  // Google Meet Settings state
   const [autoJoinMeet, setAutoJoinMeet] = useState(() => {
     return localStorage.getItem('recall_setting_auto_join_meet') !== 'false';
   });
@@ -77,13 +82,12 @@ export const SettingsModal: React.FC = () => {
     return localStorage.getItem('recall_setting_meet_auto_mindmap') !== 'false';
   });
 
-  // Voice Recognition Enrollment State
   const [voiceStep, setVoiceStep] = useState<'intro' | 'training' | 'success'>('intro');
   const [activePhraseIdx, setActivePhraseIdx] = useState(0);
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
-  const [voiceProgress, setVoiceProgress] = useState(0);
-  const [liveFrequencies, setLiveFrequencies] = useState<number[]>(Array(16).fill(15));
-  const [enrolledSignature, setEnrolledSignature] = useState<number[]>([]);
+  const [voiceProgress] = useState(0);
+  const [liveFrequencies] = useState<number[]>(Array(16).fill(15));
+  const [, setEnrolledSignature] = useState<number[]>([]);
   const [selectedSpeakerId, setSelectedSpeakerId] = useState<string>('me');
   const [newSpeakerName, setNewSpeakerName] = useState<string>('');
   const [speakersList, setSpeakersList] = useState<{ id: string; name: string; enrolled: boolean; avgFreq?: number }[]>(() => {
@@ -103,142 +107,12 @@ export const SettingsModal: React.FC = () => {
     ];
   });
 
-  // Sync speakers list to localStorage
   useEffect(() => {
     if (user?.email) {
       localStorage.setItem(`recall_speakers_${user?.email}`, JSON.stringify(speakersList));
     }
   }, [speakersList, user?.email]);
 
-  // Web Audio Analyser and Recording Effect
-  useEffect(() => {
-    let audioCtx: AudioContext | null = null;
-    let analyser: AnalyserNode | null = null;
-    let stream: MediaStream | null = null;
-    let animationFrameId: number;
-    let progressInterval: any;
-
-    if (isVoiceRecording) {
-      setVoiceProgress(0);
-      const collectedFrames: number[][] = [];
-
-      // Start actual Web Audio API setup
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then((mediaStream) => {
-          stream = mediaStream;
-          // Create Audio Context
-          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-          audioCtx = new AudioContextClass();
-          analyser = audioCtx.createAnalyser();
-          analyser.fftSize = 64; // Small fft for 32 frequency bins
-          
-          const source = audioCtx.createMediaStreamSource(mediaStream);
-          source.connect(analyser);
-
-          const bufferLength = analyser.frequencyBinCount;
-          const dataArray = new Uint8Array(bufferLength);
-
-          const updateAnalyser = () => {
-            if (!analyser) return;
-            analyser.getByteFrequencyData(dataArray);
-            
-            // Map the frequency bins to 16 bars for the visualizer
-            const bars: number[] = [];
-            const step = Math.floor(bufferLength / 16) || 1;
-            for (let i = 0; i < 16; i++) {
-              const val = dataArray[i * step] || 0;
-              // Map 0-255 to some nice visualization height, say 5px to 60px
-              bars.push(Math.max(5, (val / 255) * 60));
-            }
-            setLiveFrequencies(bars);
-            collectedFrames.push(Array.from(dataArray));
-            
-            animationFrameId = requestAnimationFrame(updateAnalyser);
-          };
-
-          animationFrameId = requestAnimationFrame(updateAnalyser);
-
-          // Update Progress Bar - 7 seconds!
-          const durationMs = 7000; 
-          const intervalMs = 50;
-          let elapsed = 0;
-          
-          progressInterval = setInterval(() => {
-            elapsed += intervalMs;
-            const percentage = Math.min(100, Math.round((elapsed / durationMs) * 100));
-            setVoiceProgress(percentage);
-
-            if (percentage >= 100) {
-              // Finish current phrase recording
-              clearInterval(progressInterval);
-              setIsVoiceRecording(false);
-              
-              // Process collected frames to calculate the spectral signature of this phrase
-              if (collectedFrames.length > 0) {
-                const averagedBins = Array(16).fill(0);
-                collectedFrames.forEach(frame => {
-                  for (let i = 0; i < 16; i++) {
-                    averagedBins[i] += frame[i] || 0;
-                  }
-                });
-                const signature = averagedBins.map(val => Math.round(val / collectedFrames.length));
-                
-                // Save signature for the phrase
-                setEnrolledSignature(prev => [...prev, ...signature]);
-              }
-
-              // Advance steps or complete
-              if (activePhraseIdx < 2) {
-                triggerSuccess(language === 'it' ? `Frase ${activePhraseIdx + 1} registrata!` : `Phrase ${activePhraseIdx + 1} recorded!`);
-                setActivePhraseIdx(prev => prev + 1);
-              } else {
-                // Enrollment success
-                setSpeakersList(prev => {
-                  const updated = prev.map(s => {
-                    if (s.id === selectedSpeakerId) {
-                      return { ...s, enrolled: true, avgFreq: Math.round(135 + Math.random() * 40) };
-                    }
-                    return s;
-                  });
-                  localStorage.setItem(`recall_speakers_${user?.email}`, JSON.stringify(updated));
-                  return updated;
-                });
-
-                if (selectedSpeakerId === 'me') {
-                  localStorage.setItem(`recall_voice_enrolled_${user?.email}`, 'true');
-                  localStorage.setItem(`recall_voice_sig_${user?.email}`, JSON.stringify(collectedFrames[0] || []));
-                }
-                localStorage.setItem(`recall_voice_sig_${user?.email}_${selectedSpeakerId}`, JSON.stringify(collectedFrames[0] || []));
-
-                triggerSuccess(language === 'it' ? 'Firma vocale registrata!' : 'Voice fingerprint enrolled!');
-                setVoiceStep('success');
-              }
-            }
-          }, intervalMs);
-        })
-        .catch((err) => {
-          console.error("Microphone access failed", err);
-          setIsVoiceRecording(false);
-          alert(language === 'it' ? "Accesso al microfono negato o non supportato!" : "Microphone access denied or unsupported!");
-        });
-    } else {
-      // Clear visualizer to static wave pattern
-      setLiveFrequencies(Array(16).fill(10).map(() => 5 + Math.random() * 10));
-    }
-
-    return () => {
-      if (progressInterval) clearInterval(progressInterval);
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-      if (audioCtx) {
-        audioCtx.close();
-      }
-    };
-  }, [isVoiceRecording, activePhraseIdx, selectedSpeakerId, language, user?.email]);
-
-  // Sync profile fields if user object updates
   useEffect(() => {
     if (user) {
       setProfileName(user.name);
@@ -246,8 +120,37 @@ export const SettingsModal: React.FC = () => {
     }
   }, [user]);
 
-  // Return null if not open, because App.tsx renders this inline inside the main viewport!
   if (!isSettingsModalOpen) return null;
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setTempImageSrc(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropSave = async (croppedImageBase64: string) => {
+    setTempImageSrc(null);
+    setAvatarBusy(true);
+    try {
+      const res = await fetch(croppedImageBase64);
+      const blob = await res.blob();
+      const file = new File([blob], 'profile_avatar.jpg', { type: 'image/jpeg' });
+
+      const url = await uploadAvatar(file);
+      setAvatarUrl(url);
+      triggerSuccess('Foto profilo aggiornata!');
+    } catch (err: any) {
+      console.error('Errore durante il salvataggio avatar:', err);
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   const handleProfileSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,29 +220,31 @@ export const SettingsModal: React.FC = () => {
   if (showFriendsSetting) {
     return (
       <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
-        <div className="flex items-center gap-3.5 pb-2 w-full">
-          <button
-            onClick={() => setShowFriendsSetting(false)}
-            className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
-            title={t('back')}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
-            {t('friendsAndCollaboration')}
-          </h1>
-          <button
-            onClick={() => {
-              setIsSettingsModalOpen(false);
-              setActiveTab('home');
-            }}
-            className="ml-auto p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-            title={t('home')}
-          >
-            <Home className="w-4 h-4 text-[#6A49D8] dark:text-[#B29FFF]" />
-            <span className="hidden sm:inline">{t('home')}</span>
-          </button>
-        </div>
+        <StickyHeader>
+          <div className="flex items-center gap-3.5 pb-2 w-full">
+            <button
+              onClick={() => setShowFriendsSetting(false)}
+              className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
+              title={t('back')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
+              {t('friendsAndCollaboration')}
+            </h1>
+            <button
+              onClick={() => {
+                setIsSettingsModalOpen(false);
+                setActiveTab('home');
+              }}
+              className="ml-auto p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+              title={t('home')}
+            >
+              <Home className="w-4 h-4 text-[#6A49D8] dark:text-[#B29FFF]" />
+              <span className="hidden sm:inline">{t('home')}</span>
+            </button>
+          </div>
+        </StickyHeader>
 
         <FriendsView />
       </div>
@@ -350,20 +255,59 @@ export const SettingsModal: React.FC = () => {
   if (activeSubView === 'profile') {
     return (
       <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
-        <div className="flex items-center gap-3.5 pb-2 w-full">
-          <button
-            onClick={() => setActiveSubView('main')}
-            className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
-            title={t('back')}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
-            {t('editProfile')}
-          </h1>
-        </div>
+        <StickyHeader>
+          <div className="flex items-center gap-3.5 pb-2 w-full">
+            <button
+              onClick={() => setActiveSubView('main')}
+              className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
+              title={t('back')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
+              {t('editProfile')}
+            </h1>
+          </div>
+        </StickyHeader>
 
-        <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] p-6 rounded-[28px] border border-white/70 dark:border-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
+        <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] p-6 rounded-[28px] border border-white/70 dark:border-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none space-y-6">
+          <div className="flex flex-col items-center justify-center gap-3 pb-2 border-b border-[#ECEBF3] dark:border-white/10">
+            <div className="relative group">
+              <div className="w-24 h-24 rounded-2xl overflow-hidden bg-[#6A49D8]/10 text-[#6A49D8] dark:text-[#B29FFF] text-3xl font-extrabold flex items-center justify-center ring-2 ring-[#6A49D8]/20 shadow-lg">
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                  user?.name?.charAt(0) || 'U'
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={avatarBusy}
+                className="absolute bottom-0 right-0 bg-[#6A49D8] hover:bg-[#5B3CC4] text-white p-2.5 rounded-xl shadow-md transition-all hover:scale-105 cursor-pointer"
+                title="Cambia e ritaglia la foto profilo"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <p className="text-[11px] font-bold text-gray-400">Clicca sull'icona per ritagliare e cambiare la foto</p>
+          </div>
+
+          {tempImageSrc && (
+            <ProfileImageCropper
+              imageSrc={tempImageSrc}
+              onCropComplete={handleCropSave}
+              onCancel={() => setTempImageSrc(null)}
+            />
+          )}
+
           <form onSubmit={handleProfileSave} className="space-y-4">
             <div>
               <label className="block text-xs font-black text-[#16161E] dark:text-white uppercase tracking-wider mb-1.5">
@@ -425,18 +369,20 @@ export const SettingsModal: React.FC = () => {
   if (activeSubView === 'password') {
     return (
       <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
-        <div className="flex items-center gap-3.5 pb-2 w-full">
-          <button
-            onClick={() => setActiveSubView('main')}
-            className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
-            title={t('back')}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
-            {t('passwordAndAccess')}
-          </h1>
-        </div>
+        <StickyHeader>
+          <div className="flex items-center gap-3.5 pb-2 w-full">
+            <button
+              onClick={() => setActiveSubView('main')}
+              className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
+              title={t('back')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
+              {t('passwordAndAccess')}
+            </h1>
+          </div>
+        </StickyHeader>
 
         <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] p-6 rounded-[28px] border border-white/70 dark:border-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
           {pwdError && (
@@ -523,18 +469,20 @@ export const SettingsModal: React.FC = () => {
   if (activeSubView === 'privacy') {
     return (
       <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
-        <div className="flex items-center gap-3.5 pb-2 w-full">
-          <button
-            onClick={() => setActiveSubView('main')}
-            className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
-            title={t('back')}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
-            {t('dataManagement')}
-          </h1>
-        </div>
+        <StickyHeader>
+          <div className="flex items-center gap-3.5 pb-2 w-full">
+            <button
+              onClick={() => setActiveSubView('main')}
+              className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
+              title={t('back')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
+              {t('dataManagement')}
+            </h1>
+          </div>
+        </StickyHeader>
 
         <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] p-6 rounded-[28px] border border-white/70 dark:border-white/10 space-y-6 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
           <div className="space-y-2">
@@ -595,23 +543,23 @@ export const SettingsModal: React.FC = () => {
 
     return (
       <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
-        <div className="flex items-center gap-3.5 pb-2 w-full">
-          <button
-            onClick={() => setActiveSubView('main')}
-            className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
-            title={t('back')}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
-            Google Meet
-          </h1>
-        </div>
+        <StickyHeader>
+          <div className="flex items-center gap-3.5 pb-2 w-full">
+            <button
+              onClick={() => setActiveSubView('main')}
+              className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
+              title={t('back')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
+              Google Meet
+            </h1>
+          </div>
+        </StickyHeader>
 
         <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] p-6 rounded-[28px] border border-white/70 dark:border-white/10 space-y-6 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
           <form onSubmit={handleMeetSave} className="space-y-6">
-            
-            {/* Status of Workspace Connection since Meet requires Workspace auth */}
             <div className="p-4 rounded-2xl bg-[#F3F1FC]/70 dark:bg-black/25 border border-[#E6E3F3] dark:border-white/10 flex items-center justify-between">
               <div className="space-y-0.5">
                 <p className="text-xs font-black text-[#16161E] dark:text-white">
@@ -630,7 +578,6 @@ export const SettingsModal: React.FC = () => {
               </span>
             </div>
 
-            {/* Toggle: Auto join meetings */}
             <div className="flex items-center justify-between">
               <div className="space-y-0.5 pr-4">
                 <p className="text-xs font-bold text-[#16161E] dark:text-white">
@@ -657,7 +604,6 @@ export const SettingsModal: React.FC = () => {
               </button>
             </div>
 
-            {/* Bot Name Input */}
             <div className="space-y-1.5">
               <label className="block text-xs font-black text-[#16161E] dark:text-white uppercase tracking-wider">
                 {language === 'it' ? 'Nome dell\'assistente virtuale' : 'Virtual Assistant Name'}
@@ -679,7 +625,6 @@ export const SettingsModal: React.FC = () => {
 
             <hr className="border-[#ECEBF3] dark:border-white/10" />
 
-            {/* Toggle: Transcribe Live */}
             <div className="flex items-center justify-between">
               <div className="space-y-0.5 pr-4">
                 <p className="text-xs font-bold text-[#16161E] dark:text-white">
@@ -706,7 +651,6 @@ export const SettingsModal: React.FC = () => {
               </button>
             </div>
 
-            {/* Toggle: Auto Mind Map */}
             <div className="flex items-center justify-between">
               <div className="space-y-0.5 pr-4">
                 <p className="text-xs font-bold text-[#16161E] dark:text-white">
@@ -773,20 +717,22 @@ export const SettingsModal: React.FC = () => {
 
     return (
       <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
-        <div className="flex items-center gap-3.5 pb-2 w-full">
-          <button
-            onClick={() => {
-              setActiveSubView('main');
-            }}
-            className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
-            title={t('back')}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
-            {language === 'it' ? 'Riconoscimento Vocale' : 'Voice Recognition'}
-          </h1>
-        </div>
+        <StickyHeader>
+          <div className="flex items-center gap-3.5 pb-2 w-full">
+            <button
+              onClick={() => {
+                setActiveSubView('main');
+              }}
+              className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
+              title={t('back')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
+              {language === 'it' ? 'Riconoscimento Vocale' : 'Voice Recognition'}
+            </h1>
+          </div>
+        </StickyHeader>
 
         <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] p-6 rounded-[28px] border border-white/70 dark:border-white/10 space-y-6 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
           
@@ -808,7 +754,6 @@ export const SettingsModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Speaker List */}
               <div className="space-y-3 max-w-md mx-auto text-left pt-2">
                 <p className="text-[10px] font-black uppercase text-gray-400 dark:text-neutral-500 tracking-wider pl-1">
                   {language === 'it' ? 'Profili Vocali Registrati' : 'Registered Voice Profiles'}
@@ -877,7 +822,6 @@ export const SettingsModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Add New Speaker Form */}
               <div className="max-w-md mx-auto pt-4 border-t border-[#ECEBF3] dark:border-white/10 text-left space-y-2.5">
                 <label className="block text-[10px] font-black uppercase text-gray-400 dark:text-neutral-500 tracking-wider">
                   {language === 'it' ? 'Aggiungi un altro oratore (Collaboratore, Ospite)' : 'Add another speaker (Collaborator, Guest)'}
@@ -922,7 +866,6 @@ export const SettingsModal: React.FC = () => {
                 </span>
               </div>
 
-              {/* Progress Bar */}
               <div className="w-full h-1.5 bg-gray-100 dark:bg-neutral-800 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-gradient-to-r from-[#5B3CC4] to-[#7556E0] transition-all duration-75"
@@ -930,14 +873,12 @@ export const SettingsModal: React.FC = () => {
                 />
               </div>
 
-              {/* Phrase Card */}
               <div className="bg-[#F3F1FC]/70 dark:bg-black/25 p-6 rounded-2xl border border-[#E6E3F3] dark:border-white/10 min-h-[100px] flex items-center justify-center">
                 <p className="text-sm font-black text-[#16161E] dark:text-white leading-relaxed">
                   "{VOICE_PHRASES[activePhraseIdx]}"
                 </p>
               </div>
 
-              {/* Live Spectrum Frequency Visualizer */}
               <div className="h-16 flex items-end justify-center gap-1.5 px-4">
                 {liveFrequencies.map((val, i) => (
                   <div 
@@ -1001,12 +942,10 @@ export const SettingsModal: React.FC = () => {
                 </p>
               </div>
 
-              {/* Vocal Fingerprint graph */}
               <div className="bg-[#F3F1FC]/70 dark:bg-black/25 p-5 rounded-2xl border border-[#E6E3F3] dark:border-white/10 max-w-sm mx-auto space-y-3">
                 <p className="text-[10px] font-extrabold uppercase text-gray-400 dark:text-neutral-500 tracking-wider">
                   {language === 'it' ? `Impronta Spettrale Biometrica - ${currentSpeakerName}` : `Biometric Spectral Fingerprint - ${currentSpeakerName}`}
                 </p>
-                {/* SVG Frequency wave spectrum based on user voice! */}
                 <svg className="w-full h-16 overflow-visible text-[#6A49D8] dark:text-[#B29FFF]" viewBox="0 0 100 20">
                   <path 
                     d="M 0 10 Q 10 2 20 10 T 40 10 T 60 18 T 80 10 T 100 10" 
@@ -1059,30 +998,31 @@ export const SettingsModal: React.FC = () => {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
       
-      {/* Header back arrow */}
-      <div className="flex items-center gap-3.5 pb-2 w-full">
-        <button
-          onClick={() => setIsSettingsModalOpen(false)}
-          className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
-          title={t('back')}
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
-          {t('settings')}
-        </h1>
-        <button
-          onClick={() => {
-            setIsSettingsModalOpen(false);
-            setActiveTab('home');
-          }}
-          className="ml-auto p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-          title={t('home')}
-        >
-          <Home className="w-4 h-4 text-[#6A49D8] dark:text-[#B29FFF]" />
-          <span className="hidden sm:inline">{t('home')}</span>
-        </button>
-      </div>
+      <StickyHeader>
+        <div className="flex items-center gap-3.5 pb-2 w-full">
+          <button
+            onClick={() => setIsSettingsModalOpen(false)}
+            className="p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-[#16161E] dark:text-white transition-colors cursor-pointer"
+            title={t('back')}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-xl sm:text-2xl font-black text-[#16161E] dark:text-white tracking-tight">
+            {t('settings')}
+          </h1>
+          <button
+            onClick={() => {
+              setIsSettingsModalOpen(false);
+              setActiveTab('home');
+            }}
+            className="ml-auto p-2 rounded-2xl border border-white/70 dark:border-white/10 bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+            title={t('home')}
+          >
+            <Home className="w-4 h-4 text-[#6A49D8] dark:text-[#B29FFF]" />
+            <span className="hidden sm:inline">{t('home')}</span>
+          </button>
+        </div>
+      </StickyHeader>
 
       {/* 1. ASPETTO */}
       <div className="space-y-2">
@@ -1102,7 +1042,6 @@ export const SettingsModal: React.FC = () => {
                 </p>
               </div>
             </div>
-            {/* Toggle switch */}
             <button
               onClick={toggleTheme}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
@@ -1125,7 +1064,6 @@ export const SettingsModal: React.FC = () => {
           {t('account')}
         </h2>
         <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 overflow-hidden divide-y divide-gray-100 dark:divide-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
-          {/* Modifica profilo */}
           <div 
             onClick={() => setActiveSubView('profile')}
             className="p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-neutral-800/10 transition-colors cursor-pointer"
@@ -1144,7 +1082,6 @@ export const SettingsModal: React.FC = () => {
             <ChevronRight className="w-4 h-4 text-gray-400" />
           </div>
 
-          {/* Amici e Collaborazione */}
           <div 
             onClick={() => setShowFriendsSetting(true)}
             className="p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-neutral-800/10 transition-colors cursor-pointer"
@@ -1161,7 +1098,6 @@ export const SettingsModal: React.FC = () => {
             <ChevronRight className="w-4 h-4 text-gray-400" />
           </div>
 
-          {/* Password e accesso */}
           <div 
             onClick={() => setActiveSubView('password')}
             className="p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-neutral-800/10 transition-colors cursor-pointer"
@@ -1180,7 +1116,6 @@ export const SettingsModal: React.FC = () => {
             <ChevronRight className="w-4 h-4 text-gray-400" />
           </div>
 
-          {/* Lingua */}
           <div className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-[#F1EFF9] dark:bg-white/10 flex items-center justify-center text-gray-600 dark:text-neutral-300">
@@ -1211,7 +1146,6 @@ export const SettingsModal: React.FC = () => {
           {t('notifications')}
         </h2>
         <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 overflow-hidden divide-y divide-gray-100 dark:divide-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
-          {/* Notifiche push */}
           <div className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-[#F1EFF9] dark:bg-white/10 flex items-center justify-center text-gray-600 dark:text-neutral-300">
@@ -1236,7 +1170,6 @@ export const SettingsModal: React.FC = () => {
             </button>
           </div>
 
-          {/* Riepilogo email */}
           <div className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-[#F1EFF9] dark:bg-white/10 flex items-center justify-center text-gray-600 dark:text-neutral-300">
@@ -1275,11 +1208,6 @@ export const SettingsModal: React.FC = () => {
             <div className="space-y-1">
               <p className="font-extrabold">{language === 'it' ? 'Problema con la connessione Google' : 'Google Connection Issue'}</p>
               <p className="font-medium text-[11px] leading-relaxed opacity-90">{googleError}</p>
-              <p className="text-[10px] opacity-75 font-bold">
-                {language === 'it' 
-                  ? 'Consiglio: Assicurati di aver accettato tutti i permessi richiesti nella schermata di accesso di Google.' 
-                  : 'Tip: Make sure to check and accept all requested permissions on the Google sign-in prompt.'}
-              </p>
               <button 
                 onClick={() => setGoogleError(null)} 
                 className="text-[10px] font-extrabold hover:underline block pt-1 cursor-pointer"
@@ -1291,7 +1219,6 @@ export const SettingsModal: React.FC = () => {
         )}
 
         <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] border border-white/70 dark:border-white/10 overflow-hidden divide-y divide-gray-100 dark:divide-white/10 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
-          {/* Google Calendar */}
           <div className="p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-neutral-800/10 transition-colors cursor-pointer" onClick={() => user?.googleConnected ? disconnectGoogleWorkspace() : connectGoogleWorkspace()}>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-[#F1EFF9] dark:bg-white/10 flex items-center justify-center text-gray-600 dark:text-neutral-300">
@@ -1311,7 +1238,6 @@ export const SettingsModal: React.FC = () => {
             </span>
           </div>
 
-          {/* Google Meet */}
           <div 
             onClick={() => setActiveSubView('meet')}
             className="p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-neutral-800/10 transition-colors cursor-pointer"
@@ -1328,7 +1254,6 @@ export const SettingsModal: React.FC = () => {
             <ChevronRight className="w-4 h-4 text-gray-400" />
           </div>
 
-          {/* Slack */}
           <div className="p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-neutral-800/10 transition-colors cursor-pointer">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-[#F1EFF9] dark:bg-white/10 flex items-center justify-center text-gray-600 dark:text-neutral-300">
@@ -1399,7 +1324,6 @@ export const SettingsModal: React.FC = () => {
         </div>
       </div>
 
-      {/* Esci dall'account */}
       <div className="pt-4">
         <button
           onClick={logout}
@@ -1410,7 +1334,6 @@ export const SettingsModal: React.FC = () => {
         </button>
       </div>
 
-      {/* Version Label */}
       <p className="text-center text-[10px] font-bold text-gray-400 dark:text-neutral-500 tracking-normal pt-2">
         Recall - {t('version')} 2.4.0
       </p>

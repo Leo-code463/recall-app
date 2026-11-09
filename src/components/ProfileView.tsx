@@ -1,36 +1,28 @@
 import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
+import { StickyHeader } from './StickyHeader';
 import {
-  User,
   Mail,
   Calendar,
   CheckCircle2,
   Clock,
-  Mic,
   MessageSquare,
-  Shield,
-  CreditCard,
   Zap,
   ArrowRight,
-  Settings,
-  Sliders,
-  Moon,
-  Sun,
   LogOut,
   Camera,
   Trash2,
 } from 'lucide-react';
 import { AILogo } from './AILogo';
 import { uploadAvatar, removeAvatar } from '../services/avatarService';
+import { ProfileImageCropper } from './ProfileImageCropper';
 
 export const ProfileView: React.FC = () => {
   const {
     user,
     meetings,
-    upcomingEvents,
     setPlan,
-    setIsUpgradeModalOpen,
     setIsSettingsModalOpen,
     isDarkMode,
     toggleTheme,
@@ -40,20 +32,36 @@ export const ProfileView: React.FC = () => {
 
   const { language, t } = useLanguage();
 
-  // Immagine profilo
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [tempImageSrc, setTempImageSrc] = useState<string | null>(null);
+
   const currentAvatar = user?.avatarUrl;
 
-  const handleAvatarPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setTempImageSrc(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropSave = async (croppedImageBase64: string) => {
+    setTempImageSrc(null);
     setAvatarBusy(true);
     setAvatarError(null);
     try {
-      setAvatarUrl(await uploadAvatar(file));
+      const res = await fetch(croppedImageBase64);
+      const blob = await res.blob();
+      const file = new File([blob], 'profile_avatar.jpg', { type: 'image/jpeg' });
+
+      const url = await uploadAvatar(file);
+      setAvatarUrl(url);
     } catch (err: any) {
       setAvatarError(err?.message || (language === 'it' ? 'Caricamento non riuscito.' : 'Upload failed.'));
     } finally {
@@ -83,15 +91,16 @@ export const ProfileView: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-20 max-w-4xl mx-auto">
-      <div>
+      {/* Header Sticky con Titolo */}
+      <StickyHeader>
         <h1 className="text-2xl font-extrabold text-[#16161E] dark:text-white tracking-tight">
           {t('profile')}
         </h1>
-      </div>
+      </StickyHeader>
 
       {/* User Card */}
-      <div className="glass-card rounded-3xl p-6 sm:p-8">
-        <div className="relative shrink-0 self-center sm:self-start">
+      <div className="glass-card rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6">
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -122,7 +131,7 @@ export const ProfileView: React.FC = () => {
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={handleAvatarPick}
+            onChange={handleFileSelect}
           />
           {currentAvatar && !avatarBusy && (
             <button
@@ -172,7 +181,16 @@ export const ProfileView: React.FC = () => {
         </div>
       </div>
 
-      {/* Statistiche di Utilizzo Reali */}
+      {/* Modal di Ritaglio */}
+      {tempImageSrc && (
+        <ProfileImageCropper
+          imageSrc={tempImageSrc}
+          onCropComplete={handleCropSave}
+          onCancel={() => setTempImageSrc(null)}
+        />
+      )}
+
+      {/* Statistiche di Utilizzo */}
       <div>
         <h2 className="text-base font-bold text-[#16161E] dark:text-white mb-4">
           {t('usageStatsTitle')}
@@ -229,7 +247,7 @@ export const ProfileView: React.FC = () => {
         </div>
       </div>
 
-      {/* Piani di Abbonamento (Free vs Pro) */}
+      {/* Piani di Abbonamento */}
       <div className="bg-white/75 backdrop-blur-xl dark:bg-white/[0.06] rounded-[28px] p-6 sm:p-8 border border-white/70 dark:border-white/10 space-y-6 shadow-[0_10px_40px_-14px_rgba(106,73,216,0.22)] dark:shadow-none">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -241,7 +259,6 @@ export const ProfileView: React.FC = () => {
             </p>
           </div>
 
-          {/* Quick Plan Switcher */}
           <div className="flex items-center gap-1.5 bg-[#F3F1FC]/70 dark:bg-white/10 p-1.5 rounded-2xl border border-[#E6E3F3] dark:border-transparent">
             <button
               onClick={() => setPlan('free')}
@@ -266,9 +283,7 @@ export const ProfileView: React.FC = () => {
           </div>
         </div>
 
-        {/* Two Plan Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Piano Gratuito */}
           <div
             className={`p-6 rounded-3xl border transition-all ${
               user?.plan === 'free'
@@ -320,7 +335,6 @@ export const ProfileView: React.FC = () => {
             )}
           </div>
 
-          {/* Piano PRO */}
           <div
             className={`p-6 rounded-3xl border transition-all ${
               user?.plan === 'pro'
@@ -385,7 +399,7 @@ export const ProfileView: React.FC = () => {
         </div>
       </div>
 
-      {/* Impostazioni dell'Applicazione & Preferenze */}
+      {/* Impostazioni dell'Applicazione */}
       <div className="bg-white/75 backdrop-blur-lg dark:bg-white/[0.06] rounded-2xl p-4 shadow-xs border border-white/70 dark:border-white/10 space-y-3">
         <div>
           <h2 className="text-xs font-black uppercase tracking-wider text-gray-400 dark:text-neutral-500">
@@ -394,7 +408,6 @@ export const ProfileView: React.FC = () => {
         </div>
 
         <div className="space-y-2">
-          {/* Main Settings Modal Trigger - "fallo sottile con scritto solo impostazioni" */}
           <button
             id="profile-open-settings-btn"
             onClick={() => setIsSettingsModalOpen(true)}
@@ -404,7 +417,6 @@ export const ProfileView: React.FC = () => {
             <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
           </button>
 
-          {/* Quick Theme Switcher */}
           <button
             id="profile-theme-toggle-btn"
             onClick={toggleTheme}
@@ -424,7 +436,6 @@ export const ProfileView: React.FC = () => {
           </button>
         </div>
 
-        {/* Account Logout Option */}
         <div className="pt-2 border-t border-[#ECEBF3] dark:border-white/10 flex items-center justify-between text-[11px]">
           <span className="text-gray-400 dark:text-neutral-500">
             {t('accessEmailLabel')} {user?.email}
