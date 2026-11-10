@@ -25,6 +25,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var import_express = __toESM(require("express"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_path = __toESM(require("path"), 1);
+var import_fs = __toESM(require("fs"), 1);
 var import_vite = require("vite");
 var import_app = require("firebase-admin/app");
 var import_auth = require("firebase-admin/auth");
@@ -137,16 +138,16 @@ function describeOllamaError(err, model) {
     return `Il servizio IA non ha risposto entro ${Math.round(OLLAMA_TIMEOUT_MS / 1e3)} secondi. Riprova.`;
   }
   if (/fetch failed|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ETIMEDOUT|ECONNRESET/i.test(msg) || /fetch failed|ECONNREFUSED/i.test(String(err?.cause?.code || err?.cause?.message || ""))) {
-    return `Il servizio IA non \xE8 raggiungibile su ${OLLAMA_BASE_URL}. Controlla OLLAMA_BASE_URL e la connessione.`;
+    return `Il servizio IA non \xE8 raggiungibile su ${OLLAMA_BASE_URL}. Controlla OLLAMA_BASE_URL e la connessione (con Ollama locale: verifica che sia avviato).`;
   }
   if (/HTTP 401|HTTP 403/.test(msg)) {
     return "Servizio IA non configurato correttamente (OLLAMA_API_KEY mancante o non valida).";
   }
   if (/HTTP 429/.test(msg)) {
-    return "Il servizio IA ha raggiunto il limite di richieste. Riprova tra qualche istante.";
+    return "Il servizio IA ha raggiunto il limite di richieste del piano gratuito. Riprova tra qualche istante.";
   }
   if (/HTTP 404/.test(msg) || /not found/i.test(msg)) {
-    return `Modello IA "${model}" non trovato. Controlla OLLAMA_MODEL.`;
+    return `Modello IA "${model}" non trovato. Controlla OLLAMA_MODEL (con Ollama locale: ollama pull ${model}).`;
   }
   return msg;
 }
@@ -208,9 +209,30 @@ async function generateWithModelFallback(params) {
   }
   throw new Error(describeOllamaError(lastError, lastModel));
 }
+async function checkOllamaOnStartup() {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4e3);
+    const r = await fetch(`${OLLAMA_BASE_URL}/models`, {
+      headers: { Authorization: `Bearer ${OLLAMA_API_KEY}` },
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const names = (data?.data || []).map((m) => m.id);
+    console.log(`[AI] Servizio raggiungibile su ${OLLAMA_BASE_URL}. Modello predefinito: ${OLLAMA_MODEL}.`);
+    if (names.length > 0 && !names.some((n) => n === OLLAMA_MODEL || n.startsWith(`${OLLAMA_MODEL}:`))) {
+      console.warn(`[AI] Il modello "${OLLAMA_MODEL}" non risulta installato. Con Ollama locale: ollama pull ${OLLAMA_MODEL}`);
+    }
+  } catch (err) {
+    console.warn(`[AI] Servizio NON raggiungibile su ${OLLAMA_BASE_URL} (${err?.message || err}). Le funzioni IA falliranno finch\xE9 non \xE8 avviato.`);
+  }
+}
 function safeExtractJson(rawText, defaultFallback = {}) {
   if (!rawText || !rawText.trim()) return defaultFallback;
-  let clean = rawText.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  let clean = rawText.trim();
+  clean = clean.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
   try {
     return JSON.parse(clean);
   } catch (err) {
@@ -222,6 +244,15 @@ function safeExtractJson(rawText, defaultFallback = {}) {
       } catch (e2) {
       }
     }
+    const firstBracket = clean.indexOf("[");
+    const lastBracket = clean.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      try {
+        return JSON.parse(clean.substring(firstBracket, lastBracket + 1));
+      } catch (e3) {
+      }
+    }
+    console.warn("safeExtractJson fallback used due to parse failure:", clean.slice(0, 100));
     return defaultFallback;
   }
 }
@@ -260,7 +291,7 @@ Restituisci ESCLUSIVAMENTE un JSON valido:
 });
 app.post("/api/ai/summarize-chunks", async (req, res) => {
   try {
-    const { chunkSummaries, actionItems } = req.body;
+    const { chunkSummaries, actionItems, totalDuration } = req.body;
     const summariesList = Array.isArray(chunkSummaries) ? chunkSummaries.join("\n- ") : "";
     const tasksList = Array.isArray(actionItems) ? actionItems.join("\n- ") : "";
     const prompt = `Unisci i seguenti punti chiave estratti durante la riunione in una sintesi esecutiva finale.
@@ -311,48 +342,1240 @@ Restituisci ESCLUSIVAMENTE un JSON valido conforme a questa struttura:
     res.json({ success: true, ...parsed });
   } catch (error) {
     console.error("Summarize chunks error:", error);
-    res.status(500).json({ success: false, error: "Errore nella generazione della sintesi" });
+    res.status(500).json({ success: false, error: "Errore nella generazione della sintesi dai blocchi" });
   }
 });
-app.post("/api/transcribe", async (req, res) => {
+app.post("/api/process-meeting", async (req, res) => {
   try {
-    const { text, liveTranscript, transcript, languageHint } = req.body;
+    const { text, liveTranscript, transcript, plan, languageHint, referenceDate } = req.body;
     const sourceText = transcriptToText(text ?? liveTranscript ?? transcript);
-    if (!sourceText || sourceText.replace(/\s/g, "").length < 5) {
-      return res.status(400).json({ success: false, error: "Trascrizione vuota" });
+    if (sourceText.replace(/\s/g, "").length < 15) {
+      return res.status(400).json({
+        success: false,
+        error: "Trascrizione vuota o troppo breve: il riconoscimento vocale sul dispositivo non ha prodotto testo."
+      });
     }
-    const prompt = `Struttura la trascrizione in segmenti e interlocutori.
-Lingua: ${languageHint || "it"}.
+    if (!sourceText) {
+      return res.status(400).json({
+        success: false,
+        error: "Nessun testo da elaborare: trascrivi l'audio sul dispositivo e invia solo il testo."
+      });
+    }
+    const todayDate = referenceDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const prompt = `Sei il motore di elaborazione di Recap per professionisti.
+Ricevi la TRASCRIZIONE TESTUALE di una riunione, gi\xE0 prodotta sul dispositivo dell'utente (non \xE8 disponibile alcun audio).
+Elaborala e genera in un singolo passaggio:
+1. Suddivisione in interventi. Separa gli interlocutori SOLO se il testo lo rende evidente; altrimenti usa un unico "Interlocutore 1". Non inventare contenuti che non sono nel testo.
+2. Sintesi esecutiva ad alto impatto per dirigenti (panoramica, decisioni chiave, argomenti, sentiment, citazioni).
+3. Action items concreti (con incaricato e scadenza dedotta).
+4. Rilevamento impegni per Google Calendar (eventi, follow-up, call future concordate).
+
+Data di riferimento: ${todayDate}.
+Lingua principale attesa: ${languageHint || "Italiano"}.
+Livello account: ${plan === "pro" ? "PRO" : "FREE"}.
 
 TRASCRIZIONE:
 """
 ${sourceText}
 """
 
-Restituisci JSON:
+Restituisci ESCLUSIVAMENTE un JSON valido conforme a questa esatta struttura:
 {
-  "title": "Titolo Breve",
-  "category": "Riunione",
-  "speakers": [{ "id": "spk_1", "name": "Interlocutore 1", "color": "#6C5DD3" }],
-  "segments": [{ "id": "seg_1", "speakerId": "spk_1", "speakerName": "Interlocutore 1", "timeOffset": 0, "text": "${sourceText.replace(/"/g, "'")}" }]
-}`;
+  "title": "Titolo breve, professionale ed espressivo della riunione (max 6 parole)",
+  "language": "it",
+  "category": "Riunione" | "Colloquio" | "Brainstorming" | "1-on-1" | "Chiamata",
+  "speakers": [
+    { "id": "spk_1", "name": "Interlocutore 1", "role": "Ruolo dedotto o interlocutore", "color": "#6C5DD3" },
+    { "id": "spk_2", "name": "Interlocutore 2", "role": "Ruolo dedotto o interlocutore", "color": "#3B82F6" }
+  ],
+  "segments": [
+    {
+      "id": "seg_1",
+      "speakerId": "spk_1",
+      "speakerName": "Interlocutore 1",
+      "timeOffset": 0,
+      "text": "Frase pronunciata chiaramente..."
+    }
+  ],
+  "summary": {
+    "overview": "Panoramica dettagliata ed elegante di 2-4 frasi sugli argomenti centrali discussi, il contesto e i punti chiave.",
+    "keyDecisions": [
+      "Decisione cruciale 1 presa durante il meeting",
+      "Decisione cruciale 2..."
+    ],
+    "mindMap": {
+      "core": "Concetto o pilastro centrale della riunione (es. Lancio Prodotto)",
+      "branches": [
+        {
+          "title": "Sotto-argomento o Pilastro 1 (es. Strategia di Marketing)",
+          "ideas": ["Idea chiave o decisione 1", "Dettaglio operativo 2"]
+        },
+        {
+          "title": "Sotto-argomento o Pilastro 2 (es. Sviluppo Tecnico)",
+          "ideas": ["Idea chiave A", "Accordo tecnico B"]
+        }
+      ]
+    },
+    "actionItems": [
+      {
+        "task": "Descrizione chiara, concreta ed attuabile dell'attivit\xE0",
+        "assignee": "Nome della persona incaricata (es. 'Leonardo', 'Marco' o 'Team')",
+        "dueDate": "Data o scadenza concordata (es. 'Entro venerd\xEC' o '15 Settembre')",
+        "priority": "Alta" | "Media" | "Bassa"
+      }
+    ],
+    "topics": ["Argomento 1", "Argomento 2"],
+    "sentiment": "positive" | "neutral" | "constructive",
+    "keyQuotes": ["Citazione o accordo chiave registrato..."]
+  },
+  "calendarEvents": [
+    {
+      "title": "Titolo professionale dell'evento (es. 'Call di Allineamento')",
+      "date": "YYYY-MM-DD",
+      "startTime": "HH:MM",
+      "endTime": "HH:MM",
+      "description": "Dettagli dell'incontro concordato",
+      "attendees": ["Leonardo"],
+      "location": "Google Meet",
+      "confidence": 0.95
+    }
+  ]
+}
+
+Il campo "timeOffset" non \xE8 disponibile: usa 0. Se il testo \xE8 molto breve o \xE8 un appunto rapido, riportalo fedelmente e crea comunque una sintesi puntuale e appropriata.`;
     const response = await generateWithModelFallback({
-      system: "Rispondi sempre con JSON valido.",
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo. I contenuti sono in italiano.",
+      prompt,
+      json: true,
+      temperature: 0.2
+    });
+    const parsed = safeExtractJson(response.text, {
+      title: "Nuova Registrazione Vocale",
+      language: "it",
+      category: "Riunione",
+      speakers: [{ id: "spk_1", name: "Interlocutore 1", color: "#6C5DD3" }],
+      segments: [{ id: "seg_1", speakerId: "spk_1", speakerName: "Interlocutore 1", timeOffset: 0, text: sourceText }],
+      summary: {
+        overview: `Registrazione elaborata con successo: ${sourceText.slice(0, 300)}`,
+        keyDecisions: ["Registrazione archiviata e trascritta con successo."],
+        mindMap: {
+          core: "Conversazione",
+          branches: [
+            { title: "Sintesi", ideas: ["Registrazione archiviata e trascritta con successo."] }
+          ]
+        },
+        actionItems: [],
+        topics: ["Audio"],
+        sentiment: "positive",
+        keyQuotes: []
+      },
+      calendarEvents: []
+    });
+    if (!parsed.segments || parsed.segments.length === 0) {
+      parsed.segments = [{ id: "seg_1", speakerId: "spk_1", speakerName: parsed.speakers?.[0]?.name || "Interlocutore 1", timeOffset: 0, text: sourceText }];
+    }
+    if (!parsed.speakers || parsed.speakers.length === 0) {
+      parsed.speakers = [{ id: "spk_1", name: "Interlocutore 1", color: "#6C5DD3" }];
+    }
+    if (!parsed.summary) {
+      parsed.summary = {
+        overview: "Riassunto elaborato dall'IA.",
+        keyDecisions: [],
+        actionItems: [],
+        topics: [],
+        sentiment: "positive",
+        keyQuotes: []
+      };
+    }
+    res.json({ success: true, data: parsed });
+  } catch (error) {
+    console.error("Process meeting error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Errore durante l'elaborazione della riunione"
+    });
+  }
+});
+app.post("/api/transcribe", async (req, res) => {
+  try {
+    const { text, liveTranscript, transcript, plan, languageHint } = req.body;
+    const sourceText = transcriptToText(text ?? liveTranscript ?? transcript);
+    if (sourceText.replace(/\s/g, "").length < 15) {
+      return res.status(400).json({
+        success: false,
+        error: "Trascrizione vuota o troppo breve: il riconoscimento vocale sul dispositivo non ha prodotto testo."
+      });
+    }
+    if (!sourceText) {
+      return res.status(400).json({
+        success: false,
+        error: "Nessun testo da elaborare: trascrivi l'audio sul dispositivo e invia solo il testo."
+      });
+    }
+    const prompt = `Sei il modulo di strutturazione delle trascrizioni di Recap.
+Ricevi una trascrizione testuale gi\xE0 prodotta sul dispositivo dell'utente. Non modificarne il contenuto: dividila in segmenti naturali e, SOLO se il testo lo rende evidente, separa gli interlocutori. Se non \xE8 possibile distinguerli usa un unico "Interlocutore 1".
+
+Lingua principale attesa: ${languageHint || "Italiano"}.
+Livello account: ${plan === "pro" ? "PRO" : "FREE"}.
+
+TRASCRIZIONE:
+"""
+${sourceText}
+"""
+
+Restituisci ESCLUSIVAMENTE un JSON valido con questa esatta struttura:
+{
+  "title": "Titolo breve, professionale ed espressivo della riunione (max 6 parole)",
+  "language": "it",
+  "category": "Riunione" | "Colloquio" | "Brainstorming" | "1-on-1" | "Chiamata",
+  "speakers": [
+    { "id": "spk_1", "name": "Interlocutore 1", "role": "Ruolo dedotto o sconosciuto", "color": "#6C5DD3" },
+    { "id": "spk_2", "name": "Interlocutore 2", "role": "Ruolo dedotto o sconosciuto", "color": "#3B82F6" }
+  ],
+  "segments": [
+    {
+      "id": "seg_1",
+      "speakerId": "spk_1",
+      "speakerName": "Interlocutore 1",
+      "timeOffset": 0,
+      "text": "Testo chiaro e puntuale pronunciato dal primo interlocutore..."
+    }
+  ]
+}
+
+Il campo "timeOffset" non \xE8 disponibile: usa 0.`;
+    const response = await generateWithModelFallback({
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo.",
       prompt,
       json: true,
       temperature: 0.2
     });
     const parsed = safeExtractJson(response.text, {
       title: "Nuova Registrazione",
+      language: "it",
       category: "Riunione",
       speakers: [{ id: "spk_1", name: "Interlocutore 1", color: "#6C5DD3" }],
       segments: [{ id: "seg_1", speakerId: "spk_1", speakerName: "Interlocutore 1", timeOffset: 0, text: sourceText }]
     });
+    if (!parsed.segments || parsed.segments.length === 0) {
+      parsed.segments = [{ id: "seg_1", speakerId: "spk_1", speakerName: "Interlocutore 1", timeOffset: 0, text: sourceText }];
+    }
+    if (!parsed.speakers || parsed.speakers.length === 0) {
+      parsed.speakers = [{ id: "spk_1", name: "Interlocutore 1", color: "#6C5DD3" }];
+    }
     res.json({ success: true, data: parsed });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("Transcription structuring error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Errore durante l'elaborazione della trascrizione"
+    });
   }
 });
+app.post("/api/summarize", async (req, res) => {
+  try {
+    const { transcript, meetingTitle } = req.body;
+    const prompt = `Sei l'assistente IA esecutivo di Recap.
+Genera una sintesi professionale ad alto impatto per dirigenti e professionisti.
+
+Titolo riunione: "${meetingTitle || "Riunione"}"
+
+Trascrizione completa o segmenti:
+${transcriptToText(transcript)}
+
+Restituisci ESCLUSIVAMENTE un JSON valido conforme a questo schema:
+{
+  "overview": "Panoramica dettagliata ed elegante di 2-4 frasi sugli argomenti centrali discussi, il contesto e i punti chiave.",
+  "keyDecisions": [
+    "Decisione cruciale 1 presa durante il meeting",
+    "Decisione cruciale 2..."
+  ],
+  "mindMap": {
+    "core": "Concetto o pilastro centrale della riunione",
+    "branches": [
+      {
+        "title": "Sotto-argomento o Pilastro 1",
+        "ideas": ["Idea chiave 1", "Dettaglio operativo 2"]
+      }
+    ]
+  },
+  "actionItems": [
+    {
+      "task": "Descrizione chiara, concreta ed attuabile dell'attivit\xE0",
+      "assignee": "Nome della persona incaricata (es. 'Leonardo', 'Marco' o 'Team')",
+      "dueDate": "Data o scadenza concordata (es. 'Entro venerd\xEC ore 18:00' o '15 Settembre')",
+      "priority": "Alta" | "Media" | "Bassa"
+    }
+  ],
+  "topics": ["Argomento 1", "Argomento 2", "Argomento 3"],
+  "sentiment": "positive" | "neutral" | "constructive",
+  "keyQuotes": [
+    "Citazione testuale memorabile o accordo chiave registrato..."
+  ]
+}`;
+    const response = await generateWithModelFallback({
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo. I contenuti sono in italiano.",
+      prompt,
+      json: true,
+      temperature: 0.2
+    });
+    const parsed = safeExtractJson(response.text, {
+      overview: "Sintesi elaborata con successo.",
+      keyDecisions: [],
+      mindMap: {
+        core: "Conversazione",
+        branches: [
+          { title: "Sintesi", ideas: ["Sintesi elaborata con successo."] }
+        ]
+      },
+      actionItems: [],
+      topics: [],
+      sentiment: "positive",
+      keyQuotes: []
+    });
+    res.json({ success: true, data: parsed });
+  } catch (error) {
+    console.error("Summarize error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Errore durante la generazione del riassunto IA"
+    });
+  }
+});
+app.post("/api/detect-calendar-events", async (req, res) => {
+  try {
+    const { transcript, meetingDate } = req.body;
+    const todayDate = meetingDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const prompt = `Sei il modulo 'Calendario AI' di Recap per professionisti.
+Analizza accuratamente la trascrizione della riunione per identificare TUTTI gli impegni futuri, date, scadenze, riunioni di follow-up, call o demo concordate tra i partecipanti.
+
+Data di riferimento della riunione: ${todayDate}.
+
+Trascrizione:
+${transcriptToText(transcript)}
+
+Estrai ogni impegno rilevato in formato JSON valido:
+{
+  "events": [
+    {
+      "title": "Titolo professionale dell'evento (es: 'Demo Client Acme' o 'Review Architettura')",
+      "date": "YYYY-MM-DD",
+      "startTime": "HH:MM",
+      "endTime": "HH:MM",
+      "description": "Contesto e note estratte dalla conversazione",
+      "attendees": ["email o nomi dei partecipanti menzionati"],
+      "location": "Google Meet" | "Ufficio" | "Remoto",
+      "confidence": 0.95
+    }
+  ]
+}
+
+Se non sono stati citati orari precisi, deduci un orario lavorativo logico (es. 10:00 o 15:00) e durata di 45-60 minuti.`;
+    const response = await generateWithModelFallback({
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo. I contenuti sono in italiano.",
+      prompt,
+      json: true,
+      temperature: 0.2
+    });
+    const parsed = safeExtractJson(response.text, { events: [] });
+    res.json({ success: true, events: parsed.events || [] });
+  } catch (error) {
+    console.error("Calendar detection error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Errore durante il rilevamento impegni per il calendario"
+    });
+  }
+});
+app.post("/api/analyze-tasks", async (req, res) => {
+  try {
+    const { tasks, referenceDate } = req.body;
+    const todayDate = referenceDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const prompt = `Sei l'assistente IA di Recap specializzato nell'analisi predittiva della produttivit\xE0 e dell'agenda.
+L'utente ti fornisce la lista delle sue attuali Google Tasks / attivit\xE0 da completare.
+Il tuo compito \xE8 ESAMINARE ciascun task per determinare se si tratta in realt\xE0 di una RIUNIONE, APPUNTAMENTO, CALL, DEMO, COLLOQUIO o EVENTO che dovrebbe essere pianificato su Google Calendar anzich\xE9 rimanere come semplice to-do text.
+
+Data odierna di riferimento: ${todayDate}.
+
+Lista dei compiti (Google Tasks):
+${JSON.stringify(tasks || [], null, 2)}
+
+Per OGNI task fornito, restituisci l'analisi nel seguente formato JSON:
+{
+  "analyses": [
+    {
+      "taskId": "id_del_task",
+      "taskTitle": "titolo_originale",
+      "isMeetingOrEvent": true | false,
+      "confidence": 0.95,
+      "reasoning": "Spiegazione chiara in italiano sul perch\xE9 questo task \xE8 identificato come evento o riunione (es. 'Il task indica chiaramente una call con Marco fissata per gioved\xEC alle 15:00')",
+      "suggestedEvent": {
+        "title": "Titolo professionale per Google Calendar (es. 'Call con Marco')",
+        "date": "YYYY-MM-DD (data dedotta coerente con la data di riferimento)",
+        "startTime": "HH:MM (es. 15:00 o 10:00 se non specificato)",
+        "endTime": "HH:MM (es. 16:00)",
+        "location": "Google Meet" | "Ufficio" | "In presenza",
+        "attendees": ["nomi o email citati"],
+        "description": "Note e contesto ricavati dal task per l'evento del calendario"
+      }
+    }
+  ]
+}
+
+Se un task \xE8 una semplice to-do (es. 'Inviare fattura', 'Comprare cavo HDMI', 'Scrivere documentazione'), imposta "isMeetingOrEvent": false, confidence: 0.95, reasoning: "Attivit\xE0 operativa, non richiede una riunione", e ometti o lascia null "suggestedEvent".
+Se un task menziona 'Call', 'Meeting', 'Riunione', 'Incontro', 'Demo', 'Allineamento', 'Visita', 'Colloquio' o include giorni/ore, imposta "isMeetingOrEvent": true con i dettagli del suggestedEvent.`;
+    const response = await generateWithModelFallback({
+      system: "Rispondi sempre e soltanto con JSON valido, senza testo prima o dopo. I contenuti sono in italiano.",
+      prompt,
+      json: true,
+      temperature: 0.2
+    });
+    const parsed = safeExtractJson(response.text, { analyses: [] });
+    res.json({ success: true, analyses: parsed.analyses || [] });
+  } catch (error) {
+    console.error("Task analysis error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Errore durante l'analisi delle task con IA"
+    });
+  }
+});
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { question, transcript, summary, meetingTitle } = req.body;
+    const prompt = `Sei l'assistente conversazionale intelligente di Recap.
+Rispondi con massima precisione, tono professionale, cordiale ed efficace in lingua italiana.
+Basa le tue risposte rigorosamente sui fatti e sulle decisioni emerse in questa specifica riunione:
+
+TITOLO RIUNIONE: ${meetingTitle || "Riunione Recap"}
+
+PANORAMICA / RIASSUNTO:
+${summary ? JSON.stringify(summary, null, 2) : "Nessun riassunto disponibile"}
+
+TRASCRIZIONE COMPLETA:
+${transcriptToText(transcript)}
+
+DOMANDA DELL'UTENTE:
+${question}
+
+Se l'utente ti chiede di formulare una mail di recap, una lista di task o un messaggio Slack per il team, crea il testo pronto per essere copiato ed inviato. Se un dettaglio non \xE8 stato menzionato nella riunione, specificalo con trasparenza senza inventare dati.`;
+    const response = await generateWithModelFallback({
+      prompt,
+      temperature: 0.3
+    });
+    res.json({
+      success: true,
+      answer: response.text || "Non sono riuscito a elaborare una risposta."
+    });
+  } catch (error) {
+    console.error("Chat error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Errore nella chat IA"
+    });
+  }
+});
+var GROQ_TRANSCRIBE_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
+var GROQ_WHISPER_MODEL = process.env.GROQ_WHISPER_MODEL || "whisper-large-v3";
+var GROQ_API_KEY = process.env.GROQ_API_KEY || (/groq\.com/i.test(OLLAMA_BASE_URL) ? process.env.OLLAMA_API_KEY || "" : "");
+var TRANSCRIBE_DAILY_LIMIT_SEC = Number(process.env.TRANSCRIBE_DAILY_LIMIT_SEC) || 60 * 60;
+var TRANSCRIBE_MAX_BYTES = 25 * 1024 * 1024;
+var TRANSCRIBE_TIMEOUT_MS = Number(process.env.TRANSCRIBE_TIMEOUT_MS) || 12e4;
+var transcribeUsage = /* @__PURE__ */ new Map();
+function utcDay() {
+  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+}
+function getTranscribeUsed(uid) {
+  const u = transcribeUsage.get(uid);
+  return u && u.day === utcDay() ? u.seconds : 0;
+}
+function addTranscribeUsed(uid, seconds) {
+  transcribeUsage.set(uid, { day: utcDay(), seconds: getTranscribeUsed(uid) + seconds });
+}
+setInterval(() => {
+  const day = utcDay();
+  for (const [uid, u] of transcribeUsage) if (u.day !== day) transcribeUsage.delete(uid);
+}, 60 * 60 * 1e3).unref();
+var AUDIO_EXTENSIONS = {
+  "audio/webm": "webm",
+  "video/webm": "webm",
+  "audio/ogg": "ogg",
+  "audio/mp4": "m4a",
+  "audio/m4a": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "m4a",
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav"
+};
+app.post(
+  "/api/transcribe-audio",
+  import_express.default.raw({ type: ["audio/*", "video/webm", "application/octet-stream"], limit: TRANSCRIBE_MAX_BYTES }),
+  async (req, res) => {
+    try {
+      if (!GROQ_API_KEY) {
+        console.error("[transcribe-audio] GROQ_API_KEY mancante.");
+        return res.status(503).json({ success: false, error: "Trascrizione non configurata sul server." });
+      }
+      const audio = req.body;
+      if (!Buffer.isBuffer(audio) || audio.length < 1e3) {
+        return res.status(400).json({ success: false, error: "Audio mancante o troppo breve." });
+      }
+      const uid = req.authUser.uid;
+      const used = getTranscribeUsed(uid);
+      if (used >= TRANSCRIBE_DAILY_LIMIT_SEC) {
+        return res.status(429).json({
+          success: false,
+          error: `Hai raggiunto il limite giornaliero di trascrizione (${Math.round(TRANSCRIBE_DAILY_LIMIT_SEC / 60)} minuti). Riprova domani.`,
+          code: "TRANSCRIBE_DAILY_LIMIT"
+        });
+      }
+      const mime = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+      const ext = AUDIO_EXTENSIONS[mime] || "webm";
+      const declared = Number(req.headers["x-audio-duration"]);
+      const langHeader = String(req.headers["x-audio-language"] || "it").toLowerCase();
+      const language = /^[a-z]{2}$/.test(langHeader) ? langHeader : "it";
+      const form = new FormData();
+      form.append("file", new Blob([audio], { type: mime || "audio/webm" }), `registrazione.${ext}`);
+      form.append("model", GROQ_WHISPER_MODEL);
+      form.append("language", language);
+      form.append("temperature", "0");
+      form.append("response_format", "verbose_json");
+      if (language === "it") {
+        form.append("prompt", "Trascrizione di una riunione di lavoro in italiano, con punteggiatura corretta.");
+      }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TRANSCRIBE_TIMEOUT_MS);
+      let groqRes;
+      try {
+        groqRes = await fetch(GROQ_TRANSCRIBE_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+          body: form,
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!groqRes.ok) {
+        const body = await groqRes.text();
+        console.error(`[transcribe-audio] Groq HTTP ${groqRes.status}: ${body.slice(0, 300)}`);
+        if (groqRes.status === 429) {
+          return res.status(503).json({
+            success: false,
+            error: "Il servizio di trascrizione \xE8 molto richiesto in questo momento. Riprova tra qualche minuto.",
+            code: "TRANSCRIBE_BUSY"
+          });
+        }
+        if (groqRes.status === 400 || groqRes.status === 413) {
+          return res.status(422).json({ success: false, error: "Audio non valido o troppo grande per la trascrizione." });
+        }
+        if (groqRes.status === 401 || groqRes.status === 403) {
+          return res.status(503).json({ success: false, error: "Trascrizione non configurata correttamente sul server." });
+        }
+        return res.status(502).json({ success: false, error: "Errore dal servizio di trascrizione. Riprova." });
+      }
+      const data = await groqRes.json();
+      const text = typeof data?.text === "string" ? data.text.trim() : "";
+      const realDuration = Number(data?.duration);
+      const charged = Math.max(10, Math.ceil(realDuration > 0 ? realDuration : declared > 0 ? declared : 10));
+      addTranscribeUsed(uid, charged);
+      return res.json({
+        success: true,
+        text,
+        durationSec: realDuration > 0 ? realDuration : void 0,
+        remainingSec: Math.max(0, TRANSCRIBE_DAILY_LIMIT_SEC - getTranscribeUsed(uid))
+      });
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        return res.status(504).json({ success: false, error: "La trascrizione ha impiegato troppo tempo. Riprova." });
+      }
+      console.error("[transcribe-audio]", err);
+      return res.status(500).json({ success: false, error: "Errore interno di trascrizione." });
+    }
+  },
+  (err, _req, res, _next) => {
+    if (err?.type === "entity.too.large") {
+      return res.status(413).json({ success: false, error: "File audio troppo grande (max 25 MB)." });
+    }
+    console.error("[transcribe-audio] body error", err);
+    return res.status(400).json({ success: false, error: "Richiesta audio non valida." });
+  }
+);
+var DB_FILE = import_path.default.join(process.cwd(), "recall_db.json");
+function readDB() {
+  try {
+    if (import_fs.default.existsSync(DB_FILE)) {
+      const data = import_fs.default.readFileSync(DB_FILE, "utf-8");
+      const db = JSON.parse(data);
+      if (!db.invitations) db.invitations = [];
+      if (!db.notifications) db.notifications = [];
+      if (!db.shares) db.shares = [];
+      return db;
+    }
+  } catch (e) {
+    console.error("Failed reading database, returning empty database", e);
+  }
+  return { users: {}, friendships: [], invitations: [], notifications: [], shares: [] };
+}
+function writeDB(db) {
+  try {
+    import_fs.default.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
+  } catch (e) {
+    console.error("Failed writing database", e);
+  }
+}
+var requestHistory = {};
+function isRateLimited(email) {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1e3;
+  const maxRequests = 10;
+  if (!requestHistory[email]) {
+    requestHistory[email] = [];
+  }
+  requestHistory[email] = requestHistory[email].filter((ts) => now - ts < windowMs);
+  if (requestHistory[email].length >= maxRequests) {
+    return true;
+  }
+  requestHistory[email].push(now);
+  return false;
+}
+function isValidEmail(email) {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+}
+var initialDb = readDB();
+if (Object.keys(initialDb.users).length === 0) {
+  initialDb.users["leo@alea.pro"] = { email: "leo@alea.pro", name: "Leonardo Fiorot", createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+  initialDb.users["friend@example.com"] = { email: "friend@example.com", name: "Amico Demo", createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+  initialDb.users["marco@alea.pro"] = { email: "marco@alea.pro", name: "Marco Rossini", createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+  writeDB(initialDb);
+}
+app.post("/api/users/sync", (req, res) => {
+  try {
+    const normEmail = req.authUser.email;
+    const name = cleanText(req.body?.name, 80) || cleanText(req.authUser.name, 80);
+    const inviteToken = cleanText(req.body?.inviteToken, 100);
+    const language = req.body?.language === "en" || req.body?.language === "it" ? req.body.language : void 0;
+    const db = readDB();
+    const isNew = !db.users[normEmail];
+    db.users[normEmail] = {
+      email: normEmail,
+      name: name || db.users[normEmail]?.name || normEmail.split("@")[0],
+      createdAt: db.users[normEmail]?.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+      language: language || db.users[normEmail]?.language || "it",
+      avatarUrl: db.users[normEmail]?.avatarUrl
+    };
+    let linkedFriendship = false;
+    let inviterName = "";
+    if (inviteToken && isNew && db.invitations) {
+      const invitation = db.invitations.find((inv) => inv.token === inviteToken);
+      if (invitation && invitation.status === "pending" && new Date(invitation.expiresAt) > /* @__PURE__ */ new Date()) {
+        const inviterEmail = invitation.senderEmail.toLowerCase().trim();
+        const inviterUser = db.users[inviterEmail];
+        inviterName = inviterUser?.name || inviterEmail.split("@")[0];
+        const existingFnd = db.friendships.find(
+          (f) => f.senderEmail === inviterEmail && f.receiverEmail === normEmail || f.senderEmail === normEmail && f.receiverEmail === inviterEmail
+        );
+        if (!existingFnd) {
+          const newFnd = {
+            id: `fnd_${Date.now()}`,
+            senderEmail: inviterEmail,
+            receiverEmail: normEmail,
+            status: "pending",
+            createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+            updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            creditsEarnedFromFriend: 0
+          };
+          db.friendships.push(newFnd);
+          const targetLang = db.users[normEmail]?.language || "it";
+          const msgText = targetLang === "en" ? `"${inviterName}" sent you a friend request!` : `"${inviterName}" ti ha inviato una richiesta di amicizia!`;
+          if (!db.notifications) db.notifications = [];
+          db.notifications.push({
+            id: `not_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            userEmail: normEmail,
+            message: msgText,
+            type: "friend_request",
+            senderEmail: inviterEmail,
+            senderName: inviterName,
+            friendshipId: newFnd.id,
+            read: false,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          });
+          linkedFriendship = true;
+        }
+        invitation.status = "used";
+      }
+    }
+    writeDB(db);
+    res.json({ success: true, isNew, user: db.users[normEmail], linkedFriendship, inviterName });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.post("/api/friends/request", async (req, res) => {
+  try {
+    const normSender = req.authUser.email;
+    const normReceiver = cleanText(req.body?.receiverEmail, 254).toLowerCase();
+    if (!normReceiver) {
+      return res.status(400).json({ success: false, error: "Email destinatario richiesta" });
+    }
+    if (!isValidEmail(normReceiver)) {
+      return res.status(400).json({ success: false, error: "Email destinatario non valida" });
+    }
+    if (normSender === normReceiver) {
+      return res.status(400).json({ success: false, error: "Non puoi inviare una richiesta a te stesso" });
+    }
+    if (isRateLimited(normSender)) {
+      return res.status(429).json({ success: false, error: "Hai inviato troppe richieste. Riprova tra poco." });
+    }
+    const db = readDB();
+    const senderUser = db.users[normSender];
+    const senderName = senderUser?.name || normSender.split("@")[0];
+    const receiverExists = !!db.users[normReceiver];
+    const existingIndex = db.friendships.findIndex(
+      (f) => f.senderEmail === normSender && f.receiverEmail === normReceiver || f.senderEmail === normReceiver && f.receiverEmail === normSender
+    );
+    if (existingIndex !== -1) {
+      const existing = db.friendships[existingIndex];
+      if (existing.status === "accepted") {
+        return res.status(400).json({ success: false, error: "Siete gi\xE0 amici!" });
+      }
+      if (existing.status === "pending") {
+        if (existing.senderEmail === normSender) {
+          return res.status(400).json({ success: false, error: "Hai gi\xE0 inviato una richiesta a questo utente" });
+        } else {
+          existing.status = "accepted";
+          existing.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+          const senderLang = db.users[normSender]?.language || "it";
+          const acceptedMsg = senderLang === "en" ? `"${db.users[normReceiver]?.name || normReceiver.split("@")[0]}" accepted your friend request!` : `"${db.users[normReceiver]?.name || normReceiver.split("@")[0]}" ha accettato la tua richiesta di amicizia!`;
+          if (!db.notifications) db.notifications = [];
+          db.notifications.push({
+            id: `not_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            userEmail: normSender,
+            message: acceptedMsg,
+            type: "friend_accepted",
+            senderEmail: normReceiver,
+            senderName: db.users[normReceiver]?.name || normReceiver.split("@")[0],
+            friendshipId: existing.id,
+            read: false,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          });
+          writeDB(db);
+          return res.json({ success: true, acceptedAutomatic: true, friendship: existing });
+        }
+      }
+      existing.status = "pending";
+      existing.senderEmail = normSender;
+      existing.receiverEmail = normReceiver;
+      existing.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      if (receiverExists) {
+        const receiverLang = db.users[normReceiver]?.language || "it";
+        const msgText = receiverLang === "en" ? `"${senderName}" sent you a friend request!` : `"${senderName}" ti ha inviato una richiesta di amicizia!`;
+        if (!db.notifications) db.notifications = [];
+        db.notifications.push({
+          id: `not_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          userEmail: normReceiver,
+          message: msgText,
+          type: "friend_request",
+          senderEmail: normSender,
+          senderName,
+          friendshipId: existing.id,
+          read: false,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+        writeDB(db);
+        return res.json({ success: true, friendship: existing, registered: true });
+      } else {
+        const token = `inv_${Math.random().toString(36).substring(2, 8)}${Date.now().toString(36)}`;
+        if (!db.invitations) db.invitations = [];
+        db.invitations.push({
+          email: normReceiver,
+          token,
+          senderEmail: normSender,
+          status: "pending",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3).toISOString()
+        });
+        writeDB(db);
+        await sendInviteEmail(normReceiver, senderName, normSender, token, req);
+        return res.json({ success: true, friendship: existing, registered: false, invitationToken: token });
+      }
+    }
+    if (receiverExists) {
+      const newFriendship = {
+        id: `fnd_${Date.now()}`,
+        senderEmail: normSender,
+        receiverEmail: normReceiver,
+        status: "pending",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        creditsEarnedFromFriend: 0
+      };
+      db.friendships.push(newFriendship);
+      const receiverLang = db.users[normReceiver]?.language || "it";
+      const msgText = receiverLang === "en" ? `"${senderName}" sent you a friend request!` : `"${senderName}" ti ha inviato una richiesta di amicizia!`;
+      if (!db.notifications) db.notifications = [];
+      db.notifications.push({
+        id: `not_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        userEmail: normReceiver,
+        message: msgText,
+        type: "friend_request",
+        senderEmail: normSender,
+        senderName,
+        friendshipId: newFriendship.id,
+        read: false,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      writeDB(db);
+      res.json({ success: true, friendship: newFriendship, registered: true });
+    } else {
+      if (!db.invitations) db.invitations = [];
+      const activeInvitation = db.invitations.find(
+        (inv) => inv.email === normReceiver && inv.status === "pending" && new Date(inv.expiresAt) > /* @__PURE__ */ new Date()
+      );
+      if (activeInvitation) {
+        return res.status(400).json({
+          success: false,
+          error: "Un invito \xE8 gi\xE0 stato inviato a questa email ed \xE8 in attesa di registrazione"
+        });
+      }
+      const token = `inv_${Math.random().toString(36).substring(2, 8)}${Date.now().toString(36)}`;
+      db.invitations.push({
+        email: normReceiver,
+        token,
+        senderEmail: normSender,
+        status: "pending",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3).toISOString()
+      });
+      writeDB(db);
+      await sendInviteEmail(normReceiver, senderName, normSender, token, req);
+      res.json({ success: true, registered: false, invitationToken: token });
+    }
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.post("/api/friends/respond", (req, res) => {
+  try {
+    const friendshipId = cleanText(req.body?.friendshipId, 100);
+    const action = req.body?.action;
+    if (!friendshipId || !action) {
+      return res.status(400).json({ success: false, error: "friendshipId and action required" });
+    }
+    const normEmail = req.authUser.email;
+    if (action !== "accept" && action !== "reject") {
+      return res.status(400).json({ success: false, error: "Action must be 'accept' or 'reject'" });
+    }
+    const db = readDB();
+    const friendshipIndex = db.friendships.findIndex((f) => f.id === friendshipId);
+    if (friendshipIndex === -1) {
+      return res.status(404).json({ success: false, error: "Richiesta di amicizia non trovata" });
+    }
+    const friendship = db.friendships[friendshipIndex];
+    if (friendship.receiverEmail !== normEmail) {
+      return res.status(403).json({ success: false, error: "Non sei autorizzato a rispondere a questa richiesta" });
+    }
+    if (action === "accept") {
+      friendship.status = "accepted";
+      friendship.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      const receiverUser = db.users[normEmail];
+      const receiverName = receiverUser?.name || normEmail.split("@")[0];
+      const senderLang = db.users[friendship.senderEmail]?.language || "it";
+      const acceptedMsgText = senderLang === "en" ? `"${receiverName}" accepted your friend request!` : `"${receiverName}" ha accettato la tua richiesta di amicizia!`;
+      if (!db.notifications) db.notifications = [];
+      db.notifications.push({
+        id: `not_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        userEmail: friendship.senderEmail,
+        message: acceptedMsgText,
+        type: "friend_accepted",
+        senderEmail: normEmail,
+        senderName: receiverName,
+        friendshipId: friendship.id,
+        read: false,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      db.notifications.forEach((not) => {
+        if (not.userEmail === normEmail && not.friendshipId === friendshipId && not.type === "friend_request") {
+          not.read = true;
+        }
+      });
+    } else {
+      db.friendships.splice(friendshipIndex, 1);
+      if (db.notifications) {
+        db.notifications = db.notifications.filter(
+          (not) => !(not.userEmail === normEmail && not.friendshipId === friendshipId)
+        );
+      }
+    }
+    writeDB(db);
+    res.json({ success: true, action, friendship: action === "accept" ? friendship : null });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.get("/api/friends/list", (req, res) => {
+  try {
+    const normEmail = req.authUser.email;
+    const db = readDB();
+    const friends = [];
+    const receivedPending = [];
+    const sentPending = [];
+    db.friendships.forEach((f) => {
+      if (f.status === "accepted") {
+        if (f.senderEmail === normEmail) {
+          const friendUser = db.users[f.receiverEmail] || { email: f.receiverEmail, name: f.receiverEmail.split("@")[0] };
+          friends.push({
+            friendshipId: f.id,
+            email: f.receiverEmail,
+            name: friendUser.name,
+            avatarUrl: friendUser.avatarUrl,
+            createdAt: f.createdAt,
+            creditsEarned: f.creditsEarnedFromFriend
+          });
+        } else if (f.receiverEmail === normEmail) {
+          const friendUser = db.users[f.senderEmail] || { email: f.senderEmail, name: f.senderEmail.split("@")[0] };
+          friends.push({
+            friendshipId: f.id,
+            email: f.senderEmail,
+            name: friendUser.name,
+            avatarUrl: friendUser.avatarUrl,
+            createdAt: f.createdAt,
+            creditsEarned: f.creditsEarnedFromFriend
+          });
+        }
+      } else if (f.status === "pending") {
+        if (f.receiverEmail === normEmail) {
+          const senderUser = db.users[f.senderEmail] || { email: f.senderEmail, name: f.senderEmail.split("@")[0] };
+          receivedPending.push({
+            friendshipId: f.id,
+            email: f.senderEmail,
+            name: senderUser.name,
+            avatarUrl: senderUser.avatarUrl,
+            createdAt: f.createdAt
+          });
+        } else if (f.senderEmail === normEmail) {
+          const receiverRegistered = !!db.users[f.receiverEmail];
+          const receiverUser = db.users[f.receiverEmail] || { email: f.receiverEmail, name: f.receiverEmail.split("@")[0] };
+          sentPending.push({
+            friendshipId: f.id,
+            email: f.receiverEmail,
+            name: receiverUser.name,
+            createdAt: f.createdAt,
+            registered: receiverRegistered
+          });
+        }
+      }
+    });
+    res.json({ success: true, friends, receivedPending, sentPending });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.get("/api/notifications", (req, res) => {
+  try {
+    const normEmail = req.authUser.email;
+    const db = readDB();
+    if (!db.notifications) db.notifications = [];
+    const list = db.notifications.filter((not) => not.userEmail === normEmail).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json({ success: true, notifications: list });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.post("/api/notifications/read", (req, res) => {
+  try {
+    const notificationId = cleanText(req.body?.notificationId, 100);
+    const readAll = req.body?.readAll === true;
+    const normEmail = req.authUser.email;
+    const db = readDB();
+    if (!db.notifications) db.notifications = [];
+    if (readAll) {
+      db.notifications.forEach((not) => {
+        if (not.userEmail === normEmail) {
+          not.read = true;
+        }
+      });
+    } else if (notificationId) {
+      const not = db.notifications.find((n) => n.id === notificationId && n.userEmail === normEmail);
+      if (not) {
+        not.read = true;
+      }
+    }
+    writeDB(db);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.get("/api/invitations/validate", (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).json({ success: false, error: "Token query param required" });
+    }
+    const db = readDB();
+    if (!db.invitations) db.invitations = [];
+    const invitation = db.invitations.find((inv) => inv.token === String(token));
+    if (!invitation) {
+      return res.status(404).json({ success: false, error: "Token non valido o inesistente" });
+    }
+    if (invitation.status !== "pending") {
+      return res.status(400).json({ success: false, error: `Questo token \xE8 gi\xE0 stato utilizzato (${invitation.status})` });
+    }
+    if (new Date(invitation.expiresAt) <= /* @__PURE__ */ new Date()) {
+      return res.status(400).json({ success: false, error: "Questo token di invito \xE8 scaduto" });
+    }
+    const inviterUser = db.users[invitation.senderEmail.toLowerCase().trim()];
+    const inviterName = inviterUser?.name || invitation.senderEmail.split("@")[0];
+    res.json({ success: true, invitation, inviterName });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.post("/api/users/update-language", (req, res) => {
+  try {
+    const language = req.body?.language;
+    const normEmail = req.authUser.email;
+    if (language !== "it" && language !== "en") {
+      return res.status(400).json({ success: false, error: "Language must be 'it' or 'en'" });
+    }
+    const db = readDB();
+    if (db.users[normEmail]) {
+      db.users[normEmail].language = language;
+      writeDB(db);
+      return res.json({ success: true, language: db.users[normEmail].language });
+    }
+    return res.status(404).json({ success: false, error: "User not found" });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+var AVATAR_MAX_CHARS = 2e5;
+app.post("/api/users/avatar", (req, res) => {
+  try {
+    const normEmail = req.authUser.email;
+    const dataUrl = typeof req.body?.avatar === "string" ? req.body.avatar : "";
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) {
+      return res.status(400).json({ success: false, error: "Formato immagine non valido" });
+    }
+    if (dataUrl.length > AVATAR_MAX_CHARS) {
+      return res.status(413).json({ success: false, error: "Immagine troppo pesante" });
+    }
+    const db = readDB();
+    if (!db.users[normEmail]) {
+      return res.status(404).json({ success: false, error: "Utente non trovato" });
+    }
+    db.users[normEmail].avatarUrl = dataUrl;
+    writeDB(db);
+    res.json({ success: true, avatarUrl: dataUrl });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.delete("/api/users/avatar", (req, res) => {
+  try {
+    const normEmail = req.authUser.email;
+    const db = readDB();
+    if (!db.users[normEmail]) {
+      return res.status(404).json({ success: false, error: "Utente non trovato" });
+    }
+    delete db.users[normEmail].avatarUrl;
+    writeDB(db);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+var SHARE_MAX_CHARS = 6e5;
+function areFriends(db, a, b) {
+  return db.friendships.some(
+    (f) => f.status === "accepted" && (f.senderEmail === a && f.receiverEmail === b || f.senderEmail === b && f.receiverEmail === a)
+  );
+}
+function shareMeta(db, sh) {
+  const owner = db.users[sh.ownerEmail];
+  const recipient = db.users[sh.recipientEmail];
+  return {
+    id: sh.id,
+    title: sh.title,
+    meetingDate: sh.meetingDate || "",
+    createdAt: sh.createdAt,
+    read: !!sh.readAt,
+    ownerEmail: sh.ownerEmail,
+    ownerName: owner?.name || sh.ownerEmail.split("@")[0],
+    recipientEmail: sh.recipientEmail,
+    recipientName: recipient?.name || sh.recipientEmail.split("@")[0]
+  };
+}
+app.post("/api/shares", (req, res) => {
+  try {
+    const owner = req.authUser.email;
+    const friendEmail = cleanText(req.body?.friendEmail, 254).toLowerCase();
+    const meeting = req.body?.meeting;
+    if (!friendEmail || !meeting || typeof meeting !== "object" || Array.isArray(meeting)) {
+      return res.status(400).json({ success: false, error: "Dati di condivisione non validi" });
+    }
+    if (friendEmail === owner) {
+      return res.status(400).json({ success: false, error: "Non puoi condividere con te stesso" });
+    }
+    if (isRateLimited(`share:${owner}`)) {
+      return res.status(429).json({ success: false, error: "Troppe condivisioni ravvicinate. Riprova tra qualche minuto." });
+    }
+    const db = readDB();
+    if (!areFriends(db, owner, friendEmail)) {
+      return res.status(403).json({ success: false, error: "Puoi condividere solo con i tuoi amici" });
+    }
+    const raw = JSON.stringify(meeting);
+    if (raw.length > SHARE_MAX_CHARS) {
+      return res.status(413).json({ success: false, error: "Conversazione troppo grande da condividere" });
+    }
+    const title = cleanText(meeting.title, 200) || "Conversazione";
+    const meetingDate = cleanText(String(meeting.createdAt || meeting.date || ""), 40);
+    const sh = {
+      id: `shr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      ownerEmail: owner,
+      recipientEmail: friendEmail,
+      title,
+      meetingDate,
+      snapshot: JSON.parse(raw),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (!db.shares) db.shares = [];
+    db.shares.push(sh);
+    const ownerName = db.users[owner]?.name || owner.split("@")[0];
+    const lang = db.users[friendEmail]?.language || "it";
+    if (!db.notifications) db.notifications = [];
+    db.notifications.push({
+      id: `not_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userEmail: friendEmail,
+      message: lang === "en" ? `"${ownerName}" shared the conversation "${title}" with you` : `"${ownerName}" ha condiviso con te la conversazione "${title}"`,
+      type: "conversation_shared",
+      senderEmail: owner,
+      senderName: ownerName,
+      read: false,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    writeDB(db);
+    res.json({ success: true, share: shareMeta(db, sh) });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.get("/api/shares/received", (req, res) => {
+  try {
+    const me = req.authUser.email;
+    const db = readDB();
+    const list = (db.shares || []).filter((sh) => sh.recipientEmail === me && !sh.hiddenByRecipient).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((sh) => shareMeta(db, sh));
+    res.json({ success: true, shares: list });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.get("/api/shares/sent", (req, res) => {
+  try {
+    const me = req.authUser.email;
+    const db = readDB();
+    const list = (db.shares || []).filter((sh) => sh.ownerEmail === me).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((sh) => shareMeta(db, sh));
+    res.json({ success: true, shares: list });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.get("/api/shares/:id", (req, res) => {
+  try {
+    const me = req.authUser.email;
+    const id = cleanText(req.params.id, 100);
+    const db = readDB();
+    const sh = (db.shares || []).find((x) => x.id === id);
+    const isOwner = !!sh && sh.ownerEmail === me;
+    const isRecipient = !!sh && sh.recipientEmail === me && !sh.hiddenByRecipient;
+    if (!sh || !isOwner && !isRecipient) {
+      return res.status(404).json({ success: false, error: "Conversazione non trovata" });
+    }
+    if (isRecipient && !sh.readAt) {
+      sh.readAt = (/* @__PURE__ */ new Date()).toISOString();
+      writeDB(db);
+    }
+    res.json({ success: true, share: shareMeta(db, sh), snapshot: sh.snapshot });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+app.delete("/api/shares/:id", (req, res) => {
+  try {
+    const me = req.authUser.email;
+    const id = cleanText(req.params.id, 100);
+    const db = readDB();
+    const sh = (db.shares || []).find((x) => x.id === id);
+    if (!sh) return res.status(404).json({ success: false, error: "Conversazione non trovata" });
+    if (sh.ownerEmail === me) {
+      db.shares = (db.shares || []).filter((x) => x.id !== id);
+    } else if (sh.recipientEmail === me) {
+      sh.hiddenByRecipient = true;
+    } else {
+      return res.status(404).json({ success: false, error: "Conversazione non trovata" });
+    }
+    writeDB(db);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[API error]", err);
+    res.status(500).json({ success: false, error: "Errore interno del server" });
+  }
+});
+async function sendInviteEmail(receiverEmail, senderName, senderEmail, inviteToken, req) {
+  const serviceId = process.env.EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID || "service_4o4xkok";
+  const templateId = process.env.EMAILJS_TEMPLATE_ID || process.env.VITE_EMAILJS_TEMPLATE_ID || "template_mndv7mq";
+  const publicKey = process.env.EMAILJS_PUBLIC_KEY || process.env.VITE_EMAILJS_PUBLIC_KEY || "T0-fxkSF4j0YYTyeR";
+  const origin = req.headers.origin || "http://localhost:3000";
+  const inviteLink = `${origin}?inviteToken=${inviteToken}`;
+  const db = readDB();
+  const senderUser = db.users[senderEmail.toLowerCase().trim()];
+  const senderLang = senderUser?.language || "it";
+  const emailMessage = senderLang === "en" ? `Hello! ${senderName || senderEmail} has invited you to join Recap.` : `Ciao! ${senderName || senderEmail} ti ha invitato ad unirti a Recap.`;
+  try {
+    const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_id: serviceId,
+        template_id: templateId,
+        user_id: publicKey,
+        template_params: {
+          to_email: receiverEmail,
+          inviter_name: senderName || senderEmail,
+          invite_link: inviteLink,
+          message: emailMessage
+        }
+      })
+    });
+    if (response.ok) {
+      console.log(`[Backend Invite] Email inviata con successo a ${receiverEmail}`);
+    } else {
+      const txt = await response.text();
+      console.error(`[Backend Invite] Errore EmailJS: ${txt}`);
+    }
+  } catch (err) {
+    console.error("[Backend Invite] Invio email di invito fallito", err);
+  }
+}
 app.all("/api/*", (req, res) => {
   res.status(404).json({
     success: false,
@@ -375,7 +1598,11 @@ async function startServer() {
   }
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Recap server active on http://localhost:${PORT}`);
+    void checkOllamaOnStartup();
   });
 }
 startServer();
+app.get("/google6e883f65db785910.html", (req, res) => {
+  res.send("google-site-verification: google6e883f65db785910.html");
+});
 //# sourceMappingURL=server.cjs.map
