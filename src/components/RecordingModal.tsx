@@ -43,6 +43,9 @@ export const RecordingModal: React.FC = () => {
   const speechRecognitionRef = useRef<any>(null);
   const isRecordingRef = useRef<boolean>(false);
   
+  // Riferimento dedicato ai soli blocchi DEFINITIVI per evitare duplicazioni
+  const finalTranscriptRef = useRef<string>('');
+  
   // Riferimenti per la Pipeline a Blocchi
   const accumulatedTranscriptRef = useRef<string>('');
   const lastProcessedIndexRef = useRef<number>(0);
@@ -62,6 +65,7 @@ export const RecordingModal: React.FC = () => {
     setIsPaused(false);
     setRecordingSeconds(0);
     setLiveTranscript('');
+    finalTranscriptRef.current = '';
     accumulatedTranscriptRef.current = '';
     lastProcessedIndexRef.current = 0;
     partialSummariesRef.current = [];
@@ -118,6 +122,7 @@ export const RecordingModal: React.FC = () => {
   const startLiveRecording = () => {
     setErrorMessage(null);
     setLiveTranscript('');
+    finalTranscriptRef.current = '';
     accumulatedTranscriptRef.current = '';
     lastProcessedIndexRef.current = 0;
     partialSummariesRef.current = [];
@@ -135,23 +140,22 @@ export const RecordingModal: React.FC = () => {
       recognition.interimResults = true;
       recognition.lang = 'it-IT';
 
-      // LOGICA CORRETTA ANTI-DUPLICAZIONE
+      // FIX DEFINITIVO ANTI-DUPLICAZIONE
       recognition.onresult = (event: any) => {
-        let finalText = '';
         let interimText = '';
 
-        for (let i = 0; i < event.results.length; ++i) {
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
           const part = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalText += part + ' ';
+            finalTranscriptRef.current += part + ' ';
           } else {
             interimText += part;
           }
         }
 
-        const currentText = (finalText + interimText).trim();
-        accumulatedTranscriptRef.current = finalText.trim();
-        setLiveTranscript(currentText);
+        const combinedText = (finalTranscriptRef.current + interimText).replace(/\s+/g, ' ').trim();
+        accumulatedTranscriptRef.current = finalTranscriptRef.current.trim();
+        setLiveTranscript(combinedText);
       };
 
       recognition.onerror = (e: any) => {
@@ -203,7 +207,7 @@ export const RecordingModal: React.FC = () => {
     setProcessingStage('Sintesi istantanea...');
 
     try {
-      const finalText = (accumulatedTranscriptRef.current + ' ' + liveTranscript).trim();
+      const finalText = (accumulatedTranscriptRef.current + ' ' + liveTranscript).replace(/\s+/g, ' ').trim();
       if (!finalText || finalText.length < 3) {
         throw new Error('Nessun parlato rilevato dal microfono. Riprova parlando più vicino al dispositivo.');
       }
