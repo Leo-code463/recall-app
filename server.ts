@@ -309,7 +309,7 @@ Restituisci ESCLUSIVAMENTE un JSON valido:
   }
 });
 
-app.post("/api/ai/summarize-chunks", async (req, res) => {
+app.post ("/api/ai/summarize-chunks", async (req, res) => {
   try {
     const { chunkSummaries, actionItems, totalDuration } = req.body;
 

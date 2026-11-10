@@ -169,7 +169,8 @@ export async function chatWithMeetingAiApi(params: {
     throw new Error(errorData.error || "Errore nella comunicazione con l'IA.");
   }
 
-  return await res.json();
+  const json = await res.json();
+  return String(json.answer ?? json.text ?? json.data ?? '');
 }
 
 /**
