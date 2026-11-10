@@ -140,22 +140,32 @@ export const RecordingModal: React.FC = () => {
       recognition.interimResults = true;
       recognition.lang = 'it-IT';
 
-      // FIX DEFINITIVO ANTI-DUPLICAZIONE
+      // LOGICA ANTI-DUPLICAZIONE COMPATIBILE CON WEBVIEW ANDROID
       recognition.onresult = (event: any) => {
-        let interimText = '';
+        let interimAcc = '';
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const part = event.results[i][0].transcript;
+          const transcriptChunk = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscriptRef.current += part + ' ';
+            finalTranscriptRef.current += transcriptChunk + ' ';
           } else {
-            interimText += part;
+            interimAcc = transcriptChunk;
           }
         }
 
-        const combinedText = (finalTranscriptRef.current + interimText).replace(/\s+/g, ' ').trim();
-        accumulatedTranscriptRef.current = finalTranscriptRef.current.trim();
-        setLiveTranscript(combinedText);
+        const cleanFinal = finalTranscriptRef.current.trim();
+        const cleanInterim = interimAcc.trim();
+
+        let combined = cleanFinal;
+        if (cleanInterim) {
+          if (!cleanFinal.endsWith(cleanInterim)) {
+            combined = cleanFinal ? `${cleanFinal} ${cleanInterim}` : cleanInterim;
+          }
+        }
+
+        const finalTextToDisplay = combined.replace(/\s+/g, ' ').trim();
+        accumulatedTranscriptRef.current = finalTextToDisplay;
+        setLiveTranscript(finalTextToDisplay);
       };
 
       recognition.onerror = (e: any) => {
